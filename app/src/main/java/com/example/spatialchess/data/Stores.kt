@@ -75,7 +75,6 @@ data class Settings(
     val reduceMotion: Boolean = false,
     val locale: String? = null,           // null = follow system
     val onboardingDone: Boolean = false,
-    val anchored: Boolean = false,
 ) {
     val scale: Float get() = scalePercent / 100f
 }
@@ -92,7 +91,6 @@ class SettingsStore(context: Context) {
         reduceMotion = prefs.getBoolean("reduceMotion", false),
         locale = prefs.getString("locale", null),
         onboardingDone = prefs.getBoolean("onboardingDone", false),
-        anchored = prefs.getBoolean("anchored", false),
     )
 
     fun save(s: Settings) {
@@ -100,7 +98,7 @@ class SettingsStore(context: Context) {
             .putInt("scale", s.scalePercent).putInt("yaw", s.yawDegrees).putInt("height", s.heightOffsetCm)
             .putBoolean("coords", s.showCoordinates).putBoolean("sound", s.moveSound)
             .putBoolean("reduceMotion", s.reduceMotion).putString("locale", s.locale)
-            .putBoolean("onboardingDone", s.onboardingDone).putBoolean("anchored", s.anchored)
+            .putBoolean("onboardingDone", s.onboardingDone)
             .apply()
     }
 }

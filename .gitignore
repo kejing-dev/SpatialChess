@@ -47,3 +47,6 @@ CLAUDE.md
 deliverables/screenshots-full/
 # APK is published as a GitHub Release asset, not committed
 deliverables/*.apk
+
+# workbook build temp
+deliverables/_xlsx_img/

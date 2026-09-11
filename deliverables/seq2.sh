@@ -35,8 +35,8 @@ snap 01_zh_idle
 "$D" failsave off; "$D" save; sleep 0.5
 "$D" help;                            snap 22_zh_help_sheet
 "$D" closeHelp; sleep 0.8
-"$D" anchor;                          snap 23_zh_placement_mode
-"$D" confirm; sleep 0.8
+
+
 "$D" drag g2 g4;                      snap 24_zh_drag_g2_g4
 "$D" view "30,20,1.6";                snap 25_view_left_front
 "$D" view "-30,20,1.6";               snap 26_view_right_front

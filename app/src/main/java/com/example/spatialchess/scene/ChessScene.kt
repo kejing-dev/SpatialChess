@@ -14,9 +14,9 @@ import com.pico.spatial.core.ecs.GroundShadowComponent
 import com.pico.spatial.core.ecs.HoverEffectComponent
 import com.pico.spatial.core.ecs.InteractableComponent
 import com.pico.spatial.core.ecs.ModelComponent
-import com.pico.spatial.core.ecs.OpacityControllerComponent
 import com.pico.spatial.core.ecs.TransformComponent
 import com.pico.spatial.core.ecs.resource.BlendingMode
+import com.pico.spatial.core.ecs.resource.Material
 import com.pico.spatial.core.ecs.resource.MeshResource
 import com.pico.spatial.core.ecs.resource.PhysicallyBasedMaterial
 import com.pico.spatial.core.ecs.resource.PhysicsMaterialResource
@@ -114,6 +114,10 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
     val boardRoot = Entity().apply { setName("boardRoot") }
     private val boardPivot = Entity().apply { setName("boardPivot") }
     private var modelRoot: Entity? = null
+    private var primitivesRoot: Entity? = null
+    private lateinit var boxMesh: MeshResource
+    private lateinit var cylinderMesh: MeshResource
+    private lateinit var captureInner: Entity
     private val pivots = HashMap<String, Entity>()             // pieceId → active pivot
     private val pivotKinds = HashMap<String, Kind>()           // kind represented by the active pivot
     private val sparePivots = HashMap<Pair<String, Kind>, Entity>()
@@ -123,7 +127,6 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
     private lateinit var targetMarker: Entity
     private lateinit var captureMarker: Entity
     private lateinit var blockedMarker: Entity
-    private lateinit var anchorFrame: Entity
     private var upConversion = EulerAngles()
     private val orients = ArrayList<Entity>()
     private val tweens = ArrayList<Tween>()
@@ -209,12 +212,45 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
             }
         }
 
+        if (!loadPrimitives()) return false
         buildSquares()
         buildTrays()
         buildMarkers()
         applyTransform()
         Log.i(TAG, "scene built in ${System.currentTimeMillis() - t0} ms")
         return true
+    }
+
+    /**
+     * Box / cylinder visuals come from assets/primitives.usdz. The SDK's primitive mesh factories
+     * need `com.pico.spatial.foundation.extensions...Option` classes that are missing from the
+     * system Spatial runtime on some PICO OS builds (NoClassDefFoundError on device), while USDZ
+     * meshes load everywhere.
+     */
+    private suspend fun loadPrimitives(): Boolean {
+        val prims = try {
+            Entity.loadSuspend("asset://primitives.usdz")
+        } catch (e: Exception) {
+            Log.e(TAG, "primitives load failed", e); return false
+        }
+        primitivesRoot = prims
+        boxMesh = prims.findEntity("unit_box")?.components?.get(ModelComponent::class.java)?.mesh
+            ?: run { Log.e(TAG, "unit_box missing"); return false }
+        cylinderMesh = prims.findEntity("unit_cylinder")?.components?.get(ModelComponent::class.java)?.mesh
+            ?: run { Log.e(TAG, "unit_cylinder missing"); return false }
+        return true
+    }
+
+    private fun boxEntity(name: String, size: Vector3, material: Material): Entity = Entity().apply {
+        setName(name)
+        components.set(ModelComponent(boxMesh, material))
+        transform().setScaleVector(size)
+    }
+
+    private fun discEntity(name: String, radius: Float, height: Float, material: Material): Entity = Entity().apply {
+        setName(name)
+        components.set(ModelComponent(cylinderMesh, material))
+        transform().setScaleVector(Vector3(radius * 2f, height, radius * 2f))
     }
 
     private fun kindOf(id: String): Kind = when {
@@ -265,79 +301,48 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
             setBaseColor(Color4(0.13f, 0.31f, 0.21f, 1f)); setRoughness(0.98f); setMetallic(0f)
         }
         val cream = UnlitMaterial.create().apply { setBaseColor(Color4(0.88f, 0.82f, 0.66f, 1f)) }
-        // one shared mesh for all 32 slot markers: per-entity mesh creation is very slow on the emulator
-        val slotMesh = MeshResource.createCylinder(0.0008f, 0.0065f)
         for (side in Side.values()) {
             val sign = if (side == Side.WHITE) -1f else 1f
             val size = Vector3(2 * TRAY_PITCH + 0.022f, TRAY_TOP, 8 * TRAY_PITCH + 0.022f)
+            // collider + interaction live on an unscaled parent; the visuals are scaled children
             val tray = Entity().apply { setName("tray:${side.name}") }
             tray.transform().setPosition(Vector3(sign * (TRAY_X0 + TRAY_PITCH / 2f), TRAY_TOP / 2f, 0f))
-            tray.components.set(ModelComponent(MeshResource.createBox(size, 0.005f), walnut))
             tray.components.set(CollisionComponent(listOf(ShapeResource.createBox(size)), PhysicsMaterialResource()))
             tray.components.set(InteractableComponent())
-            runCatching { tray.components.set(GroundShadowComponent(true, true)) }
             boardRoot.addChild(tray)
-            val inlay = Entity()
+            val body = boxEntity("trayBody", size, walnut)
+            runCatching { body.components.set(GroundShadowComponent(true, true)) }
+            tray.addChild(body)
+            val inlay = boxEntity("trayInlay", Vector3(size.x - 0.012f, 0.0012f, size.z - 0.012f), felt)
             inlay.transform().setPosition(Vector3(0f, TRAY_TOP / 2f + 0.0004f, 0f))
-            inlay.components.set(ModelComponent(MeshResource.createBox(Vector3(size.x - 0.012f, 0.0012f, size.z - 0.012f), 0.003f), felt))
             tray.addChild(inlay)
             for (slot in 0 until Location.TRAY_CAPACITY) {
-                val dot = Entity()
                 val c = traySlotCenter(side, slot)
+                val dot = discEntity("slot", 0.0065f, 0.0008f, cream)
                 dot.transform().setPosition(Vector3(c.x, TRAY_TOP + 0.0012f, c.z))
-                dot.components.set(ModelComponent(slotMesh, cream))
                 boardRoot.addChild(dot)
             }
         }
     }
 
     private fun flatMarker(name: String, w: Float, d: Float, color: Color4): Entity {
-        val e = Entity().apply { setName(name) }
         val mat = UnlitMaterial.create(BlendingMode.TRANSPARENT).apply { setBaseColor(color) }
-        e.components.set(ModelComponent(MeshResource.createBox(Vector3(w, 0.0015f, d), 0.002f), mat))
+        val e = boxEntity(name, Vector3(w, 0.0015f, d), mat)
         e.enabled = false
         boardRoot.addChild(e)
         return e
     }
 
     private fun buildMarkers() {
-        selectionRing = Entity().apply { setName("marker:selection") }
         val ringMat = UnlitMaterial.create(BlendingMode.TRANSPARENT).apply { setBaseColor(Color4(0.23f, 0.38f, 0.89f, 0.65f)) }
-        selectionRing.components.set(ModelComponent(MeshResource.createCylinder(0.0015f, 0.021f), ringMat))
+        selectionRing = discEntity("marker:selection", 0.021f, 0.0015f, ringMat)
         selectionRing.enabled = false
         boardRoot.addChild(selectionRing)
 
         targetMarker = flatMarker("marker:target", SQ * 0.92f, SQ * 0.92f, Color4(0.36f, 0.55f, 0.95f, 0.55f))
         captureMarker = flatMarker("marker:capture", SQ * 0.96f, SQ * 0.96f, Color4(0.95f, 0.55f, 0.25f, 0.55f))
-        val inner = flatMarker("marker:capture:inner", SQ * 0.55f, SQ * 0.55f, Color4(0.95f, 0.45f, 0.15f, 0.7f))
-        inner.removeFromParent(); captureMarker.addChild(inner); inner.enabled = true
-        inner.transform().setPosition(Vector3(0f, 0.001f, 0f))
+        captureInner = flatMarker("marker:capture:inner", SQ * 0.55f, SQ * 0.55f, Color4(0.95f, 0.45f, 0.15f, 0.7f))
         blockedMarker = flatMarker("marker:blocked", SQ * 0.92f, SQ * 0.92f, Color4(0.85f, 0.2f, 0.2f, 0.5f))
-
-        // dashed-looking table frame shown while anchoring (PRD chapter 13)
-        anchorFrame = Entity().apply { setName("anchorFrame") }
-        val half = BOARD_HALF + 0.12f
-        val frameMat = UnlitMaterial.create(BlendingMode.TRANSPARENT).apply { setBaseColor(Color4(0.30f, 0.62f, 0.42f, 0.8f)) }
-        val segments = 14
-        val segLen = 2f * half / segments * 0.9f
-        val meshX = MeshResource.createBox(Vector3(segLen, 0.001f, 0.006f), 0f)
-        val meshZ = MeshResource.createBox(Vector3(0.006f, 0.001f, segLen), 0f)
-        for (edge in 0 until 4) {
-            for (s in 0 until segments) {
-                if (s % 2 == 1) continue
-                val t = (s + 0.5f) / segments * 2f * half - half
-                val seg = Entity()
-                val pos = when (edge) {
-                    0 -> Vector3(t, 0.0015f, -half); 1 -> Vector3(t, 0.0015f, half)
-                    2 -> Vector3(-half, 0.0015f, t); else -> Vector3(half, 0.0015f, t)
-                }
-                seg.transform().setPosition(pos)
-                seg.components.set(ModelComponent(if (edge < 2) meshX else meshZ, frameMat))
-                anchorFrame.addChild(seg)
-            }
-        }
-        anchorFrame.enabled = false
-        boardRoot.addChild(anchorFrame)
     }
 
     // ------------------------------------------------------------------ transforms
@@ -535,19 +540,15 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
     }
 
     fun showTarget(square: Int?, capture: Boolean, blocked: Boolean = false) {
-        targetMarker.enabled = false; captureMarker.enabled = false; blockedMarker.enabled = false
+        targetMarker.enabled = false; captureMarker.enabled = false; captureInner.enabled = false; blockedMarker.enabled = false
         if (square == null) return
         val m = if (blocked) blockedMarker else if (capture) captureMarker else targetMarker
         m.transform().setPosition(squareCenter(square) + Vector3(0f, 0.0012f, 0f))
         m.enabled = true
-    }
-
-    fun setPlacementPreview(on: Boolean) {
-        anchorFrame.enabled = on
-        runCatching {
-            if (on) boardRoot.components.set(OpacityControllerComponent(0.55f))
-            else boardRoot.components.remove(OpacityControllerComponent::class.java)
-        }.onFailure { Log.w(TAG, "opacity controller unavailable", it) }
+        if (capture && !blocked) {
+            captureInner.transform().setPosition(squareCenter(square) + Vector3(0f, 0.0022f, 0f))
+            captureInner.enabled = true
+        }
     }
 
     // ------------------------------------------------------------------ grab & snap
@@ -617,6 +618,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
         runCatching { content.removeEntity(sceneRoot) }
         runCatching { sceneRoot.destroy(true) }
         runCatching { modelRoot?.destroy(true) }
+        runCatching { primitivesRoot?.destroy(true) }
     }
 }
 

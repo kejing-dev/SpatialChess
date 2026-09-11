@@ -22,7 +22,7 @@ import com.example.spatialchess.scene.ChessScene
 import com.example.spatialchess.scene.DropCandidate
 import com.pico.spatial.core.math.Vector3
 
-enum class Phase { LOADING, MODEL_FAILED, ONBOARDING, PLACEMENT, IDLE, GRABBED, ANIMATING }
+enum class Phase { LOADING, MODEL_FAILED, ONBOARDING, IDLE, GRABBED, ANIMATING }
 
 enum class SaveState { SAVED, UNSAVED, FAILED }
 
@@ -33,7 +33,6 @@ sealed class Panel {
     data class CapturePreview(val attackerId: String, val targetSquare: Int) : Panel()
     data class Promotion(val pieceId: String) : Panel()
     data class PromotionFailed(val pieceId: String, val kind: Kind) : Panel()
-    data class Anchor(val firstTime: Boolean) : Panel()
     data class Help(val firstUse: Boolean) : Panel()
     object Settings : Panel()
     object Reset : Panel()
@@ -103,10 +102,10 @@ class ChessViewModel private constructor(private val appContext: Context) {
         }
         newScene.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm)
         newScene.syncAll(snapshot)
-        when {
-            !settings.onboardingDone -> { phase = Phase.ONBOARDING; panel = Panel.Help(firstUse = true); hint = L10n.t("ui.text_068") }
-            !settings.anchored -> enterPlacement(firstTime = true)
-            else -> { phase = Phase.IDLE; panel = Panel.None; hint = L10n.t("ui.text_068") }
+        if (!settings.onboardingDone) {
+            phase = Phase.ONBOARDING; panel = Panel.Help(firstUse = true); hint = L10n.t("ui.text_068")
+        } else {
+            phase = Phase.IDLE; panel = Panel.None; hint = L10n.t("ui.text_068")
         }
         if (restoredFromBackup) { restoredFromBackup = false; hint = L10n.t("ui.text_003") }
         Log.i(TAG, "scene ready, phase=$phase pieces=${snapshot.pieces.size}")
@@ -122,7 +121,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
 
     private val modal: Boolean
         get() = panel is Panel.Settings || panel is Panel.Reset || panel is Panel.Help ||
-            panel is Panel.Anchor || panel is Panel.Promotion || panel is Panel.PromotionFailed
+            panel is Panel.Promotion || panel is Panel.PromotionFailed
 
     private val interactive: Boolean get() = phase == Phase.IDLE && !modal && !busy
 
@@ -149,12 +148,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
         return sym + L10n.tf("runtime.tray.count", "side" to L10n.t(side.key), "count" to snapshot.trayCount(side), "capacity" to Location.TRAY_CAPACITY)
     }
 
-    private fun idleHint() {
-        hint = when (phase) {
-            Phase.PLACEMENT -> L10n.t("ui.text_060")
-            else -> L10n.t("ui.text_068")
-        }
-    }
+    private fun idleHint() { hint = L10n.t("ui.text_068") }
 
     // ------------------------------------------------------------------ taps (assist input)
 
@@ -239,7 +233,6 @@ class ChessViewModel private constructor(private val appContext: Context) {
             is Panel.CapturePreview -> selectedId?.let { select(it) }
             is Panel.Selected -> deselect()
             is Panel.Promotion, is Panel.PromotionFailed -> { panel = Panel.None; idleHint() }
-            is Panel.Anchor -> cancelPlacement()
             else -> { panel = Panel.None; idleHint() }
         }
     }
@@ -376,30 +369,6 @@ class ChessViewModel private constructor(private val appContext: Context) {
 
     fun skipPromotion() { panel = Panel.None; idleHint() }
 
-    // ------------------------------------------------------------------ placement / anchoring
-
-    fun enterPlacement(firstTime: Boolean = false) {
-        if (busy) return
-        deselect()
-        phase = Phase.PLACEMENT
-        panel = Panel.Anchor(firstTime)
-        scene?.setPlacementPreview(true)
-        hint = L10n.t("ui.text_060")
-    }
-
-    fun confirmAnchor() {
-        settings = settings.copy(anchored = true); settingsStore.save(settings)
-        scene?.setPlacementPreview(false)
-        phase = Phase.IDLE; panel = Panel.None
-        hint = L10n.t("ui.text_068")
-    }
-
-    fun cancelPlacement() {
-        scene?.setPlacementPreview(false)
-        phase = Phase.IDLE; panel = Panel.None
-        idleHint()
-    }
-
     // ------------------------------------------------------------------ help / onboarding
 
     fun openHelp() { if (busy) return; deselect(); panel = Panel.Help(firstUse = false) }
@@ -410,7 +379,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
         panel = Panel.None
         if (wasFirst) {
             settings = settings.copy(onboardingDone = true); settingsStore.save(settings)
-            if (!settings.anchored) enterPlacement(firstTime = true) else { phase = Phase.IDLE; idleHint() }
+            phase = Phase.IDLE; idleHint()
         } else idleHint()
     }
 
@@ -447,7 +416,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
     }
 
     fun applySettings() {
-        settings = draft.copy(locale = settings.locale, onboardingDone = settings.onboardingDone, anchored = settings.anchored)
+        settings = draft.copy(locale = settings.locale, onboardingDone = settings.onboardingDone)
         settingsStore.save(settings)
         scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm)
         panel = Panel.None
@@ -552,7 +521,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
             "square" -> sq?.let { onTap("sq:$it") }
             "store" -> storeSelected()
             "cancel" -> cancelPanel()
-            "confirm" -> when (panel) { is Panel.CapturePreview -> confirmCapture(); is Panel.Anchor -> confirmAnchor(); else -> {} }
+            "confirm" -> if (panel is Panel.CapturePreview) confirmCapture()
             "undo" -> undo()
             "redo" -> redo()
             "reset" -> openReset()
@@ -565,7 +534,6 @@ class ChessViewModel private constructor(private val appContext: Context) {
             "promote" -> runCatching { Kind.valueOf(arg.uppercase()) }.getOrNull()?.let { promote(it) }
             "skipPromotion" -> skipPromotion()
             "lang" -> setLocale(if (arg.startsWith("zh")) L10n.ZH else L10n.EN)
-            "anchor" -> enterPlacement()
             "orient" -> updateDraft { it.copy(yawDegrees = arg.toIntOrNull() ?: 0) }.also { if (panel !is Panel.Settings) applySettings() }
             "scale" -> updateDraft { it.copy(scalePercent = arg.toIntOrNull() ?: 100) }.also { if (panel !is Panel.Settings) applySettings() }
             "height" -> updateDraft { it.copy(heightOffsetCm = arg.toIntOrNull() ?: 0) }.also { if (panel !is Panel.Settings) applySettings() }

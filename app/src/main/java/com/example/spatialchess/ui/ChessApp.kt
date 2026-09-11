@@ -183,7 +183,7 @@ private fun CoordLabel(vm: ChessViewModel, text: String) {
 
 @Composable
 private fun ChessToolbar(vm: ChessViewModel) {
-    val enabled = vm.phase == Phase.IDLE || vm.phase == Phase.PLACEMENT
+    val enabled = vm.phase == Phase.IDLE
     Toolbar(cornerSize = 32.dp) {
         ToolButton(L10n.t("ui.text_008"), enabled = enabled && vm.canUndo) { vm.undo() }
         Spacer(Modifier.width(8.dp))
@@ -288,14 +288,6 @@ private fun TopBar(vm: ChessViewModel, onRetryLoad: () -> Unit) {
                 }
             }
             Spacer(Modifier.weight(1f))
-            val anchored = vm.settings.anchored && vm.phase != Phase.PLACEMENT
-            Chip(
-                text = if (anchored) L10n.t("ui.text_013") else L10n.t("ui.text_061"),
-                bg = if (anchored) ChessColors.ChipGreenBg else ChessColors.WarnBg,
-                fg = if (anchored) ChessColors.ChipGreenFg else ChessColors.WarnFg,
-                onClick = { if (vm.phase == Phase.IDLE) vm.enterPlacement() },
-            )
-            Spacer(Modifier.width(12.dp))
             val saved = vm.saveState == SaveState.SAVED
             Chip(
                 text = if (saved) L10n.t("ui.text_003") else L10n.t("ui.text_045"),
@@ -323,7 +315,7 @@ private fun Chip(text: String, bg: Color, fg: Color, onClick: (() -> Unit)? = nu
 private fun ContextPanel(vm: ChessViewModel) {
     val panel = vm.panel
     val show = panel is Panel.Selected || panel is Panel.CapturePreview || panel is Panel.Promotion ||
-        panel is Panel.PromotionFailed || panel is Panel.Anchor
+        panel is Panel.PromotionFailed
     if (!show) return
     Card(modifier = Modifier.width(380.dp)) {
         when (panel) {
@@ -331,7 +323,6 @@ private fun ContextPanel(vm: ChessViewModel) {
             is Panel.CapturePreview -> CapturePanel(vm, panel)
             is Panel.Promotion -> PromotionPanel(vm, panel)
             is Panel.PromotionFailed -> PromotionFailedPanel(vm)
-            is Panel.Anchor -> AnchorPanel(vm)
             else -> {}
         }
     }
@@ -404,17 +395,6 @@ private fun PromotionFailedPanel(vm: ChessViewModel) {
         PrimaryButton(L10n.t("ui.text_047"), modifier = Modifier.fillMaxWidth()) { vm.promote(failed.kind) }
         Spacer(Modifier.height(8.dp))
         LinkButton(L10n.t("ui.text_056"), modifier = Modifier.fillMaxWidth()) { vm.skipPromotion() }
-    }
-}
-
-@Composable
-private fun AnchorPanel(vm: ChessViewModel) {
-    Column {
-        PanelTitle(L10n.t("ui.text_062"))
-        PanelBody(L10n.t("ui.text_063"))
-        PrimaryButton(L10n.t("ui.text_064"), modifier = Modifier.fillMaxWidth()) { vm.confirmAnchor() }
-        Spacer(Modifier.height(8.dp))
-        LinkButton(L10n.t("ui.text_018"), modifier = Modifier.fillMaxWidth()) { vm.cancelPanel() }
     }
 }
 
