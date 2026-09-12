@@ -26,6 +26,7 @@ object ChessColors {
     val ChipGreenFg = Color(0xFF2F7A4A)
     val WarnBg = Color(0xFFFFF1C9)      // design-style: fixed-figma-color "尚未保存" pill
     val WarnFg = Color(0xFF8A6100)
+    val PillGlass = Color(0xB8FFFFFF)   // design-style: fixed-figma-color 72% white pill behind icon buttons (UI 1.1)
     val Pill = Color(0xFFEEF1F5)        // design-style: fixed-figma-color "已保存至本机" pill / secondary button
     val Danger = Color(0xFFC0392B)
 }

@@ -100,7 +100,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
             hint = L10n.t("runtime.model.failed")
             return
         }
-        newScene.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm)
+        newScene.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm, settings.tiltDegrees)
         newScene.syncAll(snapshot)
         if (!settings.onboardingDone) {
             phase = Phase.ONBOARDING; panel = Panel.Help(firstUse = true); hint = L10n.t("ui.text_068")
@@ -403,7 +403,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
 
     fun updateDraft(transform: (Settings) -> Settings) {
         draft = transform(draft).let { it.copy(scalePercent = it.scalePercent.coerceIn(80, 140)) }
-        scene?.applySettings(draft.scalePercent, draft.yawDegrees, draft.heightOffsetCm)
+        scene?.applySettings(draft.scalePercent, draft.yawDegrees, draft.heightOffsetCm, draft.tiltDegrees)
     }
 
     fun setLocale(locale: String) {
@@ -418,14 +418,28 @@ class ChessViewModel private constructor(private val appContext: Context) {
     fun applySettings() {
         settings = draft.copy(locale = settings.locale, onboardingDone = settings.onboardingDone)
         settingsStore.save(settings)
-        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm)
+        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm, settings.tiltDegrees)
         panel = Panel.None
         idleHint()
     }
 
+    /** Side arrows (UI 1.1 · 02 每次旋转20°): apply and save immediately, never inside a grab / capture / promotion. */
+    val canTilt: Boolean
+        get() = phase == Phase.IDLE && !busy && (panel is Panel.None || panel is Panel.Selected)
+
+    fun tiltBy(deltaDegrees: Int) {
+        if (!canTilt) return
+        val next = (settings.tiltDegrees + deltaDegrees).coerceIn(0, 40)
+        if (next == settings.tiltDegrees) return
+        settings = settings.copy(tiltDegrees = next)
+        draft = settings
+        settingsStore.save(settings)
+        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm, settings.tiltDegrees)
+    }
+
     fun cancelSettings() {
         draft = settings
-        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm)
+        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm, settings.tiltDegrees)
         panel = Panel.None
         idleHint()
     }
@@ -535,6 +549,9 @@ class ChessViewModel private constructor(private val appContext: Context) {
             "skipPromotion" -> skipPromotion()
             "lang" -> setLocale(if (arg.startsWith("zh")) L10n.ZH else L10n.EN)
             "orient" -> updateDraft { it.copy(yawDegrees = arg.toIntOrNull() ?: 0) }.also { if (panel !is Panel.Settings) applySettings() }
+            "tilt" -> updateDraft { it.copy(tiltDegrees = (arg.toIntOrNull() ?: 0).coerceIn(0, 40)) }.also { if (panel !is Panel.Settings) applySettings() }
+            "tiltUp" -> tiltBy(20)
+            "tiltDown" -> tiltBy(-20)
             "scale" -> updateDraft { it.copy(scalePercent = arg.toIntOrNull() ?: 100) }.also { if (panel !is Panel.Settings) applySettings() }
             "height" -> updateDraft { it.copy(heightOffsetCm = arg.toIntOrNull() ?: 0) }.also { if (panel !is Panel.Settings) applySettings() }
             "coords" -> updateDraft { it.copy(showCoordinates = arg == "on") }.also { if (panel !is Panel.Settings) applySettings() }

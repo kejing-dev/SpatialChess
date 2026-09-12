@@ -111,6 +111,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
     ) { var startNs = -1L }
 
     val sceneRoot = Entity().apply { setName("sceneRoot") }
+    private val tiltRoot = Entity().apply { setName("tiltRoot") }   // UI 1.1: pitch about the near edge
     val boardRoot = Entity().apply { setName("boardRoot") }
     private val boardPivot = Entity().apply { setName("boardPivot") }
     private var modelRoot: Entity? = null
@@ -138,6 +139,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
     var userScale = 1f; private set
     var yawDegrees = 0f; private set
     var heightOffset = 0f; private set
+    var tiltDegrees = 0f; private set
     private var orbitYaw = 0f
     private var orbitPitch = 0f
     private var orbitZoom = 1f
@@ -156,7 +158,8 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
         modelRoot = model
         content.addEntity(sceneRoot)
         sceneRoot.transform().setPosition(Vector3(0f, floorY, 0f))
-        sceneRoot.addChild(boardRoot)
+        sceneRoot.addChild(tiltRoot)
+        tiltRoot.addChild(boardRoot)
         boardRoot.addChild(boardPivot)
 
         val boardMesh = model.findEntity("Chess_Board")
@@ -347,10 +350,11 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
 
     // ------------------------------------------------------------------ transforms
 
-    fun applySettings(scalePercent: Int, yaw: Int, heightCm: Int) {
+    fun applySettings(scalePercent: Int, yaw: Int, heightCm: Int, tilt: Int = 0) {
         userScale = scalePercent / 100f
         yawDegrees = yaw.toFloat()
         heightOffset = heightCm / 100f
+        tiltDegrees = tilt.toFloat().coerceIn(0f, 40f)
         applyTransform()
     }
 
@@ -359,19 +363,41 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
         applyTransform()
     }
 
+    /** Tilt pivot (sceneRoot metres): the board edge facing the player, independent of yaw. */
+    private fun nearEdgeZ(): Float = BOARD_HALF * modelScale * userScale
+
+    /**
+     * sceneRoot → tiltRoot (pitch about the window X axis, pivot on the near edge) → boardRoot (yaw · scale · height).
+     * The far end rises towards the player whatever the board's yaw (Figma 04 · 交互与空间约束).
+     */
     private fun applyTransform() {
         val s = modelScale * userScale
+        val zNear = nearEdgeZ()
+        tiltRoot.transform().apply {
+            setPosition(Vector3(0f, 0f, zNear))
+            setEulerAngles(EulerAngles(pitch = tiltDegrees))
+            setScaleVector(Vector3(1f, 1f, 1f))
+        }
         boardRoot.transform().apply {
-            setPosition(Vector3(0f, 0.002f + heightOffset, 0f))
+            setPosition(Vector3(0f, 0.002f + heightOffset, -zNear))
             setEulerAngles(EulerAngles(yaw = yawDegrees))
             setScaleVector(Vector3(s, s, s))
         }
         val inv = 1f / s
         for (l in labels) {
-            l.entity.transform().apply {
-                setPosition(l.local)
-                setScaleVector(Vector3(inv, inv, inv))
-                setEulerAngles(if (l.flat) EulerAngles(pitch = -90f, yaw = l.flatYaw) else EulerAngles(yaw = -yawDegrees))
+            if (l.flat) {
+                l.entity.transform().apply {
+                    setPosition(l.local)
+                    setScaleVector(Vector3(inv, inv, inv))
+                    setEulerAngles(EulerAngles(pitch = -90f, yaw = l.flatYaw))
+                }
+            } else {
+                // facing labels hang off sceneRoot so they inherit neither yaw nor tilt (UI 1.1: UI 不随棋盘倾斜)
+                l.entity.transform().apply {
+                    setPosition(boardToScene(l.local))
+                    setScaleVector(Vector3(1f, 1f, 1f))
+                    setEulerAngles(EulerAngles())
+                }
             }
         }
         sceneRoot.transform().apply {
@@ -381,22 +407,32 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
         }
     }
 
-    /** Board-local (model units) → sceneRoot-local metres. */
+    /** Board-local (model units) → sceneRoot-local metres through scale · yaw · height · tilt. */
     fun boardToScene(local: Vector3): Vector3 {
         val s = modelScale * userScale
+        val zNear = nearEdgeZ()
         val rad = Math.toRadians(yawDegrees.toDouble())
         val c = cos(rad).toFloat(); val sn = sin(rad).toFloat()
         val x = local.x * s; val z = local.z * s
-        return Vector3(c * x + sn * z, local.y * s + 0.002f + heightOffset, -sn * x + c * z)
+        val bx = c * x + sn * z
+        val by = local.y * s + 0.002f + heightOffset
+        val bz = -sn * x + c * z - zNear
+        val tr = Math.toRadians(tiltDegrees.toDouble())
+        val ct = cos(tr).toFloat(); val st = sin(tr).toFloat()
+        return Vector3(bx, by * ct - bz * st, by * st + bz * ct + zNear)
     }
 
-    /** sceneRoot-local metre delta → board-local model-unit delta. */
+    /** sceneRoot-local metre delta → board-local model-unit delta (inverse tilt, inverse yaw, inverse scale). */
     fun sceneDeltaToBoard(d: Vector3): Vector3 {
         val s = modelScale * userScale
+        val tr = Math.toRadians(-tiltDegrees.toDouble())
+        val ct = cos(tr).toFloat(); val st = sin(tr).toFloat()
+        val dy = d.y * ct - d.z * st
+        val dz = d.y * st + d.z * ct
         val rad = Math.toRadians(-yawDegrees.toDouble())
         val c = cos(rad).toFloat(); val sn = sin(rad).toFloat()
-        val x = d.x / s; val z = d.z / s
-        return Vector3(c * x + sn * z, d.y / s, -sn * x + c * z)
+        val x = d.x / s; val z = dz / s
+        return Vector3(c * x + sn * z, dy / s, -sn * x + c * z)
     }
 
     /**
@@ -405,7 +441,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
      */
     fun addLabel(entity: Entity, boardLocal: Vector3, flat: Boolean = false, flatYaw: Float = 0f) {
         labels.removeAll { it.entity === entity }
-        boardRoot.addChild(entity)
+        if (flat) boardRoot.addChild(entity) else sceneRoot.addChild(entity)
         labels.add(Label(entity, boardLocal, flat, flatYaw))
         applyTransform()
     }

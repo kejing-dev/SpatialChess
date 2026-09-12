@@ -70,6 +70,7 @@ data class Settings(
     val scalePercent: Int = 100,          // 80..140
     val yawDegrees: Int = 0,              // 0/90/180/270
     val heightOffsetCm: Int = 0,          // -1 / 0 / +1
+    val tiltDegrees: Int = 0,             // UI 1.1: 0 / 20 / 40, tilt about the near edge
     val showCoordinates: Boolean = false,
     val moveSound: Boolean = true,
     val reduceMotion: Boolean = false,
@@ -86,6 +87,7 @@ class SettingsStore(context: Context) {
         scalePercent = prefs.getInt("scale", 100).coerceIn(80, 140),
         yawDegrees = prefs.getInt("yaw", 0),
         heightOffsetCm = prefs.getInt("height", 0).coerceIn(-3, 3),
+        tiltDegrees = prefs.getInt("tilt", 0).coerceIn(0, 40),
         showCoordinates = prefs.getBoolean("coords", false),
         moveSound = prefs.getBoolean("sound", true),
         reduceMotion = prefs.getBoolean("reduceMotion", false),
@@ -95,7 +97,7 @@ class SettingsStore(context: Context) {
 
     fun save(s: Settings) {
         prefs.edit()
-            .putInt("scale", s.scalePercent).putInt("yaw", s.yawDegrees).putInt("height", s.heightOffsetCm)
+            .putInt("scale", s.scalePercent).putInt("yaw", s.yawDegrees).putInt("height", s.heightOffsetCm).putInt("tilt", s.tiltDegrees)
             .putBoolean("coords", s.showCoordinates).putBoolean("sound", s.moveSound)
             .putBoolean("reduceMotion", s.reduceMotion).putString("locale", s.locale)
             .putBoolean("onboardingDone", s.onboardingDone)

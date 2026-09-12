@@ -3,6 +3,8 @@ package com.example.spatialchess.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -29,6 +32,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,13 +52,14 @@ import com.pico.spatial.core.math.Vector3
 import com.pico.spatial.ui.design.Button
 import com.pico.spatial.ui.design.ButtonDefaults
 import com.pico.spatial.ui.design.ButtonSize
+import com.pico.spatial.ui.design.IconButton
+import com.pico.spatial.ui.design.IconButtonDefaults
 import com.pico.spatial.ui.design.PicoTheme
 import com.pico.spatial.ui.design.Slider
 import com.pico.spatial.ui.design.Switch
 import com.pico.spatial.ui.design.Text
 import com.pico.spatial.ui.design.windows.AlertDialog
 import com.pico.spatial.ui.design.windows.Sheet
-import com.pico.spatial.ui.design.windows.Toolbar
 import com.pico.spatial.ui.foundation.content.SpatialView
 import com.pico.spatial.ui.foundation.geometry.DpOffset3D
 import com.pico.spatial.ui.foundation.geometry.NormalizedPoint3D
@@ -89,8 +95,8 @@ fun ChessApp() {
         key(reload) { BoardView(vm) }
     }
 
-    ChessToolbar(vm)
-    TopBar(vm, onRetryLoad = { reload++ })
+    TopStack(vm, onRetryLoad = { reload++ })
+    TiltControl(vm)
     Overlays(vm)
 }
 
@@ -122,7 +128,6 @@ private fun BoardView(vm: ChessViewModel) {
                 }
             },
         attachments = {
-            AttachmentPanel(id = Attach.HINT) { HintLabel(vm) }
             AttachmentPanel(id = Attach.TRAY_WHITE) { TrayLabel(vm, Side.WHITE) }
             AttachmentPanel(id = Attach.TRAY_BLACK) { TrayLabel(vm, Side.BLACK) }
             AttachmentPanel(id = Attach.FILES) { CoordLabel(vm, "a   b   c   d   e   f   g   h") }
@@ -132,7 +137,6 @@ private fun BoardView(vm: ChessViewModel) {
         initial = { content, attachments ->
             val scene = ChessScene(content, floorY = -WINDOW_HEIGHT_M / 2f)
             vm.attachScene(scene)
-            attachments.entity(Attach.HINT)?.let { scene.addSceneLabel(it, Vector3(0f, 0.045f, 0.46f), pitch = -40f) }
             // contextual panel floats at the upper right of the board, facing the player (Figma 02/07/10/13)
             attachments.entity(Attach.CONTEXT)?.let { scene.addSceneLabel(it, Vector3(0.43f, 0.30f, -0.12f), pitch = -12f) }
             val trayX = ChessScene.TRAY_X0 + ChessScene.TRAY_PITCH / 2f
@@ -179,38 +183,146 @@ private fun CoordLabel(vm: ChessViewModel, text: String) {
     Text(text = text, color = ChessColors.Muted, style = PicoTheme.typography.labelSmall, fontSize = 11.sp)
 }
 
-// ---------------------------------------------------------------------- toolbar (前侧工具栏)
+// ---------------------------------------------------------------------- top stack (UI 1.1 · 标题 + 图标工具栏 + 提示)
 
 @Composable
-private fun ChessToolbar(vm: ChessViewModel) {
-    val enabled = vm.phase == Phase.IDLE
-    Toolbar(cornerSize = 32.dp) {
-        ToolButton(L10n.t("ui.text_008"), enabled = enabled && vm.canUndo) { vm.undo() }
-        Spacer(Modifier.width(8.dp))
-        ToolButton(L10n.t("ui.text_009"), enabled = enabled && vm.canRedo) { vm.redo() }
-        Spacer(Modifier.width(8.dp))
-        ToolButton(L10n.t("ui.text_010"), enabled = enabled, emphasized = true) { vm.openSettings() }
-        Spacer(Modifier.width(8.dp))
-        ToolButton(L10n.t("ui.text_011"), enabled = enabled) { vm.openReset() }
-        Spacer(Modifier.width(8.dp))
-        ToolButton(L10n.t("ui.text_012"), enabled = enabled) { vm.openHelp() }
-    }
-}
-
-@Composable
-private fun ToolButton(text: String, enabled: Boolean, emphasized: Boolean = false, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        size = ButtonDefaults.Regular,
-        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = ChessColors.Ink),
+private fun TopStack(vm: ChessViewModel, onRetryLoad: () -> Unit) {
+    Augment(
+        anchor = NormalizedPoint3D.TopFront,
+        alignment = AugmentContentAlignment.BottomCenter,
+        offset = DpOffset3D(0.dp, (-12).dp, 0.dp),
+        cornerRadius = 24.dp,
+        enableMaterialBackground = false,
     ) {
-        // design-style: inherited-content-color Button
-        Text(text, fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Medium)
+        Column(modifier = Modifier.width(1220.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (vm.panel is Panel.Settings) {
+                SettingsCard(vm)
+            } else {
+                TitleCard(vm, onRetryLoad)
+                Spacer(Modifier.height(12.dp))
+                IconToolbar(vm)
+                Spacer(Modifier.height(8.dp))
+                HintLabel(vm)
+            }
+        }
     }
 }
 
-// ---------------------------------------------------------------------- buttons
+/** Title merged with the save state (Figma 04 · 01 / 05): "Spatial Chess" over "自由摆棋 · 已保存至本机". */
+@Composable
+private fun TitleCard(vm: ChessViewModel, onRetryLoad: () -> Unit) {
+    Card {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(min = 300.dp)) {
+            Text(L10n.t("ui.text_001"), color = ChessColors.Ink, style = PicoTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            when {
+                vm.phase == Phase.MODEL_FAILED -> {
+                    Text(L10n.t("runtime.model.failed"), color = ChessColors.WarnFg, style = PicoTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    PrimaryButton(L10n.t("ui.text_047"), size = ButtonDefaults.Small) { onRetryLoad() }
+                }
+                vm.saveState == SaveState.FAILED -> {
+                    Text(L10n.t("ui.text_086"), color = ChessColors.WarnFg, style = PicoTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    PrimaryButton(L10n.t("ui.text_087"), size = ButtonDefaults.Small) { vm.retrySave() }
+                }
+                else -> Text(titleStatus(vm), color = ChessColors.Muted, style = PicoTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+private fun titleStatus(vm: ChessViewModel): String = L10n.tf(
+    "runtime.title.status",
+    "mode" to L10n.t("ui.text_092"),
+    "status" to L10n.t(if (vm.saveState == SaveState.SAVED) "ui.text_003" else "ui.text_045"),
+)
+
+/** Five icon buttons with hover labels (Figma 04 · 01 工具栏 / 08 图标文字提示). */
+@Composable
+private fun IconToolbar(vm: ChessViewModel) {
+    val enabled = vm.phase == Phase.IDLE
+    var hovered by remember { mutableStateOf<String?>(null) }
+    val onHover: (String, Boolean) -> Unit = { label, on -> hovered = if (on) label else if (hovered == label) null else hovered }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(40.dp))
+                .background(ChessColors.PillGlass)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ToolIconButton(ToolIcon.UNDO, L10n.t("ui.text_008"), enabled && vm.canUndo, onHover) { vm.undo() }
+            ToolIconButton(ToolIcon.REDO, L10n.t("ui.text_009"), enabled && vm.canRedo, onHover) { vm.redo() }
+            ToolIconButton(ToolIcon.SETTINGS, L10n.t("ui.text_078"), enabled, onHover) { vm.openSettings() }
+            ToolIconButton(ToolIcon.NEW_BOARD, L10n.t("ui.text_079"), enabled, onHover) { vm.openReset() }
+            ToolIconButton(ToolIcon.HELP, L10n.t("ui.text_012"), enabled, onHover) { vm.openHelp() }
+        }
+        // hover label; the slot is always reserved so the stack never jumps
+        Box(modifier = Modifier.height(22.dp), contentAlignment = Alignment.Center) {
+            hovered?.let { Text(it, color = ChessColors.Muted, style = PicoTheme.typography.labelSmall) }
+        }
+    }
+}
+
+@Composable
+private fun ToolIconButton(
+    icon: ToolIcon,
+    label: String,
+    enabled: Boolean,
+    onHover: (String, Boolean) -> Unit,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    LaunchedEffect(hovered, label) { onHover(label, hovered) }
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.semantics { contentDescription = label },
+        colors = ButtonDefaults.buttonColors(Color.White, ChessColors.Ink),   // white discs on the pill (Figma 04)
+        size = IconButtonDefaults.Regular,
+        enabled = enabled,
+        interactionSource = interaction,
+    ) {
+        ToolIconGlyph(icon, tint = if (enabled) ChessColors.Ink else ChessColors.Ink.copy(alpha = 0.3f))
+    }
+}
+
+// ---------------------------------------------------------------------- side tilt control (UI 1.1 · 02 每次旋转20°)
+
+@Composable
+private fun TiltControl(vm: ChessViewModel) {
+    if (vm.phase == Phase.LOADING || vm.phase == Phase.MODEL_FAILED || vm.panel is Panel.Settings) return
+    val tilt = vm.settings.tiltDegrees
+    var hovered by remember { mutableStateOf<String?>(null) }
+    val onHover: (String, Boolean) -> Unit = { label, on -> hovered = if (on) label else if (hovered == label) null else hovered }
+    Augment(
+        anchor = NormalizedPoint3D.RightFront,
+        alignment = AugmentContentAlignment.CenterRight,
+        offset = DpOffset3D((-10).dp, 0.dp, 0.dp),
+        cornerRadius = 32.dp,
+        enableMaterialBackground = false,
+    ) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(40.dp))
+                .background(ChessColors.PillGlass)
+                .padding(horizontal = 10.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // up = raise the far end (+20°), disabled at 40°; down = lower it (−20°), disabled at 0°
+            ToolIconButton(ToolIcon.TILT_UP, L10n.t("ui.text_080"), vm.canTilt && tilt < 40, onHover) { vm.tiltBy(20) }
+            Spacer(Modifier.height(8.dp))
+            ToolIconButton(ToolIcon.TILT_DOWN, L10n.t("ui.text_081"), vm.canTilt && tilt > 0, onHover) { vm.tiltBy(-20) }
+            Spacer(Modifier.height(8.dp))
+            Text(L10n.tf("runtime.tilt.angle", "deg" to tilt), color = ChessColors.Ink, style = PicoTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.Center) {
+                hovered?.let { Text(it, color = ChessColors.Muted, style = PicoTheme.typography.labelSmall) }
+            }
+        }
+    }
+}
 
 @Composable
 fun PrimaryButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, size: ButtonSize = ButtonDefaults.Regular, onClick: () -> Unit) {
@@ -246,56 +358,6 @@ private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit)
             .border(1.dp, ChessColors.CardBorder, RoundedCornerShape(24.dp))
             .padding(20.dp),
     ) { content() }
-}
-
-// ---------------------------------------------------------------------- top bar (title · save state · anchor chip)
-
-@Composable
-private fun TopBar(vm: ChessViewModel, onRetryLoad: () -> Unit) {
-    Augment(
-        anchor = NormalizedPoint3D.TopFront,
-        alignment = AugmentContentAlignment.BottomCenter,
-        offset = DpOffset3D(0.dp, (-12).dp, 0.dp),
-        cornerRadius = 24.dp,
-        enableMaterialBackground = false,
-    ) {
-        Row(modifier = Modifier.width(1240.dp), verticalAlignment = Alignment.Top) {
-            Card {
-                Column {
-                    Text(L10n.t("ui.text_001"), color = ChessColors.Ink, style = PicoTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(L10n.t("ui.text_002"), color = ChessColors.Muted, style = PicoTheme.typography.bodyMedium)
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            if (vm.saveState == SaveState.FAILED) {
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(L10n.t("ui.text_046"), color = ChessColors.Ink, style = PicoTheme.typography.bodyMedium)
-                        Spacer(Modifier.width(16.dp))
-                        SecondaryButton(L10n.t("ui.text_047"), size = ButtonDefaults.Small) { vm.retrySave() }
-                    }
-                }
-            }
-            if (vm.phase == Phase.MODEL_FAILED) {
-                Spacer(Modifier.width(16.dp))
-                Card {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(L10n.t("runtime.model.failed"), color = ChessColors.Ink, style = PicoTheme.typography.bodyMedium)
-                        Spacer(Modifier.width(16.dp))
-                        PrimaryButton(L10n.t("ui.text_047"), size = ButtonDefaults.Small) { onRetryLoad() }
-                    }
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            val saved = vm.saveState == SaveState.SAVED
-            Chip(
-                text = if (saved) L10n.t("ui.text_003") else L10n.t("ui.text_045"),
-                bg = if (saved) ChessColors.Pill else ChessColors.WarnBg,
-                fg = if (saved) ChessColors.Muted else ChessColors.WarnFg,
-            )
-        }
-    }
 }
 
 @Composable
@@ -404,7 +466,6 @@ private fun PromotionFailedPanel(vm: ChessViewModel) {
 private fun Overlays(vm: ChessViewModel) {
     when (val panel = vm.panel) {
         is Panel.Reset -> ResetDialog(vm)
-        is Panel.Settings -> SettingsSheet(vm)
         is Panel.Help -> HelpSheet(vm, panel.firstUse)
         else -> {}
     }
@@ -428,58 +489,159 @@ private fun ResetDialog(vm: ChessViewModel) {
     )
 }
 
+// ---------------------------------------------------------------------- settings card (UI 1.1 · 03 设置在volume内避让)
+
+/**
+ * "设置 / Settings" lives above the board instead of a sheet. Normal state: three columns
+ * (显示 · 棋盘 · 语言). When the tilted board needs the head room (40°) or the board is enlarged,
+ * it collapses to the compact tabbed layout (Figma 07 / 09).
+ */
 @Composable
-private fun SettingsSheet(vm: ChessViewModel) {
+private fun SettingsCard(vm: ChessViewModel) {
     val d = vm.draft
-    Sheet(
-        onDismissRequest = { vm.cancelSettings() },
-        title = { Text(L10n.t("ui.text_010"), color = ChessColors.Ink, style = PicoTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold) },
-        bottom = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                SecondaryButton(L10n.t("ui.text_018")) { vm.cancelSettings() }
-                Spacer(Modifier.width(12.dp))
-                PrimaryButton(L10n.t("ui.text_030")) { vm.applySettings() }
+    val compact = d.tiltDegrees >= 40 || d.scalePercent >= 130
+    var tab by remember { mutableIntStateOf(1) }
+    Card(modifier = Modifier.width(if (compact) 860.dp else 1180.dp)) {
+        Column {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(L10n.t("ui.text_078"), color = ChessColors.Ink, style = PicoTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(L10n.t("ui.text_001") + "  ·  " + L10n.t(if (vm.saveState == SaveState.SAVED) "ui.text_003" else "ui.text_045"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall)
+                Spacer(Modifier.weight(1f))
+                if (compact) {
+                    SecondaryButton(L10n.t("ui.text_018"), size = ButtonDefaults.Small) { vm.cancelSettings() }
+                    Spacer(Modifier.width(8.dp))
+                    PrimaryButton(L10n.t("ui.text_030"), size = ButtonDefaults.Small) { vm.applySettings() }
+                } else {
+                    Text(L10n.t("ui.text_088"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall)
+                }
             }
-        },
-    ) {
-        Column(modifier = Modifier.width(520.dp)) {
-            Text(L10n.t("ui.text_022"), color = ChessColors.Muted, style = PicoTheme.typography.bodyMedium)
-            Spacer(Modifier.height(16.dp))
-            Text(L10n.tf("runtime.board.scale", "percent" to d.scalePercent), color = ChessColors.Ink, style = PicoTheme.typography.bodyLarge)
+            Spacer(Modifier.height(14.dp))
+            if (compact) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("ui.text_083", "ui.text_084", "ui.text_085").forEachIndexed { i, key ->
+                        SecondaryButton(L10n.t(key), selected = tab == i, size = ButtonDefaults.Small) { tab = i }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                when (tab) {
+                    0 -> DisplaySection(vm, horizontal = true)
+                    1 -> BoardSection(vm, horizontal = true)
+                    else -> LanguageSection(vm, showButtons = false)
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.Top) {
+                    Column(modifier = Modifier.weight(1f)) { SectionTitle(L10n.t("ui.text_083")); DisplaySection(vm, horizontal = false) }
+                    Column(modifier = Modifier.weight(1.15f)) { SectionTitle(L10n.t("ui.text_084")); BoardSection(vm, horizontal = false) }
+                    Column(modifier = Modifier.weight(1f)) { SectionTitle(L10n.t("ui.text_065")); LanguageSection(vm, showButtons = true) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(text, color = ChessColors.Ink, style = PicoTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun DisplaySection(vm: ChessViewModel, horizontal: Boolean) {
+    val d = vm.draft
+    val sizeLabel = L10n.tf("runtime.board.scale", "percent" to d.scalePercent) + "  ·  " + L10n.tf("runtime.board.range", "min" to 80, "max" to 140)
+    val slider: @Composable () -> Unit = {
+        Column {
+            Text(sizeLabel, color = ChessColors.Ink, style = PicoTheme.typography.bodyMedium)
             Slider(
                 value = d.scalePercent.toFloat(),
                 onValueChange = { v -> vm.updateDraft { it.copy(scalePercent = v.roundToInt()) } },
                 valueRange = 80f..140f,
             )
-            Text(L10n.t("ui.text_024"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall)
-            Spacer(Modifier.height(12.dp))
-            SettingSwitch(L10n.t("ui.text_025"), d.showCoordinates) { v -> vm.updateDraft { it.copy(showCoordinates = v) } }
-            SettingSwitch(L10n.t("ui.text_026"), d.moveSound) { v -> vm.updateDraft { it.copy(moveSound = v) } }
-            SettingSwitch(L10n.t("ui.text_027"), d.reduceMotion) { v -> vm.updateDraft { it.copy(reduceMotion = v) } }
-            Spacer(Modifier.height(12.dp))
-            Text(L10n.t("ui.text_028"), color = ChessColors.Ink, style = PicoTheme.typography.bodyLarge)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (deg in listOf(0, 90, 180, 270)) {
-                    SecondaryButton("$deg°", selected = d.yawDegrees == deg, size = ButtonDefaults.Small) { vm.updateDraft { it.copy(yawDegrees = deg) } }
-                }
+        }
+    }
+    if (horizontal) {
+        Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.Top) {
+            Box(modifier = Modifier.width(300.dp)) { slider() }
+            Column(modifier = Modifier.width(240.dp)) {
+                SettingSwitch(L10n.t("ui.text_025"), d.showCoordinates) { v -> vm.updateDraft { it.copy(showCoordinates = v) } }
+                SettingSwitch(L10n.t("ui.text_026"), d.moveSound) { v -> vm.updateDraft { it.copy(moveSound = v) } }
             }
-            Spacer(Modifier.height(12.dp))
-            Text(L10n.t("ui.text_029"), color = ChessColors.Ink, style = PicoTheme.typography.bodyLarge)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (cm in listOf(-1, 0, 1)) {
-                    val label = if (cm > 0) "+ $cm cm" else if (cm < 0) "− ${-cm} cm" else "0 cm"
-                    SecondaryButton(label, selected = d.heightOffsetCm == cm, size = ButtonDefaults.Small) { vm.updateDraft { it.copy(heightOffsetCm = cm) } }
-                }
+            Column(modifier = Modifier.width(240.dp)) {
+                SettingSwitch(L10n.t("ui.text_027"), d.reduceMotion) { v -> vm.updateDraft { it.copy(reduceMotion = v) } }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(L10n.t("ui.text_065"), color = ChessColors.Ink, style = PicoTheme.typography.bodyLarge)
-                Spacer(Modifier.width(8.dp))
-                SecondaryButton(L10n.t("ui.text_066"), selected = L10n.locale == L10n.ZH, size = ButtonDefaults.Small) { vm.setLocale(L10n.ZH) }
-                SecondaryButton(L10n.t("ui.text_067"), selected = L10n.locale == L10n.EN, size = ButtonDefaults.Small) { vm.setLocale(L10n.EN) }
+        }
+    } else {
+        slider()
+        Spacer(Modifier.height(6.dp))
+        SettingSwitch(L10n.t("ui.text_025"), d.showCoordinates) { v -> vm.updateDraft { it.copy(showCoordinates = v) } }
+        SettingSwitch(L10n.t("ui.text_026"), d.moveSound) { v -> vm.updateDraft { it.copy(moveSound = v) } }
+        SettingSwitch(L10n.t("ui.text_027"), d.reduceMotion) { v -> vm.updateDraft { it.copy(reduceMotion = v) } }
+    }
+}
+
+@Composable
+private fun BoardSection(vm: ChessViewModel, horizontal: Boolean) {
+    val d = vm.draft
+    val orientation: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (deg in listOf(0, 90, 180, 270)) {
+                SecondaryButton("$deg°", selected = d.yawDegrees == deg, size = ButtonDefaults.Small) { vm.updateDraft { it.copy(yawDegrees = deg) } }
             }
+        }
+    }
+    val height: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (cm in listOf(-1, 0, 1)) {
+                val label = if (cm > 0) "+ $cm cm" else if (cm < 0) "− ${-cm} cm" else "0 cm"
+                SecondaryButton(label, selected = d.heightOffsetCm == cm, size = ButtonDefaults.Small) { vm.updateDraft { it.copy(heightOffsetCm = cm) } }
+            }
+        }
+    }
+    val tilt: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (deg in listOf(0, 20, 40)) {
+                SecondaryButton("$deg°", selected = d.tiltDegrees == deg, size = ButtonDefaults.Small) { vm.updateDraft { it.copy(tiltDegrees = deg) } }
+            }
+        }
+    }
+    if (horizontal) {
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.Top) {
+            Column { Text(L10n.t("ui.text_090"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall); Spacer(Modifier.height(6.dp)); orientation() }
+            Column { Text(L10n.t("ui.text_091"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall); Spacer(Modifier.height(6.dp)); height() }
+            Column { Text(L10n.t("ui.text_082"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall); Spacer(Modifier.height(6.dp)); tilt() }
+        }
+    } else {
+        LabeledRow(L10n.t("ui.text_090")) { orientation() }
+        Spacer(Modifier.height(10.dp))
+        LabeledRow(L10n.t("ui.text_091")) { height() }
+        Spacer(Modifier.height(10.dp))
+        LabeledRow(L10n.t("ui.text_082")) { tilt() }
+    }
+}
+
+@Composable
+private fun LabeledRow(label: String, content: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = ChessColors.Muted, style = PicoTheme.typography.bodySmall, modifier = Modifier.width(96.dp))
+        content()
+    }
+}
+
+@Composable
+private fun LanguageSection(vm: ChessViewModel, showButtons: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SecondaryButton(L10n.t("ui.text_066"), selected = L10n.locale == L10n.ZH, size = ButtonDefaults.Small) { vm.setLocale(L10n.ZH) }
+        SecondaryButton(L10n.t("ui.text_067"), selected = L10n.locale == L10n.EN, size = ButtonDefaults.Small) { vm.setLocale(L10n.EN) }
+    }
+    Spacer(Modifier.height(12.dp))
+    Text(L10n.t("ui.text_089"), color = ChessColors.Muted, style = PicoTheme.typography.bodySmall, modifier = Modifier.widthIn(max = 340.dp))
+    if (showButtons) {
+        Spacer(Modifier.height(16.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            SecondaryButton(L10n.t("ui.text_018")) { vm.cancelSettings() }
+            Spacer(Modifier.width(12.dp))
+            PrimaryButton(L10n.t("ui.text_030")) { vm.applySettings() }
         }
     }
 }
