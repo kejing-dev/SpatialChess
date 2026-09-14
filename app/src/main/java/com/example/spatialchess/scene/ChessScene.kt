@@ -39,7 +39,7 @@ sealed class DropCandidate {
 }
 
 /**
- * Owns the 3D hierarchy of the board (PRD chapter 9 "逻辑场景层级"):
+ * Owns the 3D hierarchy of the board (PRD chapter 9 "logical scene hierarchy"):
  *
  * ```
  * sceneRoot (debug orbit only) → boardRoot (scale · yaw · height) → boardPivot → Chess_Board mesh
@@ -392,7 +392,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
 
     /**
      * sceneRoot → tiltRoot (pitch about the window X axis, pivot on the near edge) → boardRoot (yaw · scale · height).
-     * The far end rises towards the player whatever the board's yaw (Figma 04 · 交互与空间约束).
+     * The far end rises towards the player whatever the board's yaw (Figma 04: interaction and spatial constraints).
      */
     private fun applyTransform() {
         val s = modelScale * userScale
@@ -416,7 +416,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
                     setEulerAngles(EulerAngles(pitch = -90f, yaw = l.flatYaw))
                 }
             } else {
-                // facing labels hang off sceneRoot so they inherit neither yaw nor tilt (UI 1.1: UI 不随棋盘倾斜)
+                // facing labels hang off sceneRoot so they inherit neither yaw nor tilt (UI 1.1: UI does not tilt with the board)
                 l.entity.transform().apply {
                     setPosition(boardToScene(l.local))
                     setScaleVector(Vector3(1f, 1f, 1f))

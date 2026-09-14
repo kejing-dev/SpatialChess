@@ -8,7 +8,7 @@ import com.pico.spatial.core.ecs.Entity
 import com.pico.spatial.core.ecs.resource.AudioResource
 
 /**
- * Move / store sound effects ("移动音效", PRD F09). The short clips ship inside the APK
+ * Move / store sound effects ("move sounds", PRD F09). The short clips ship inside the APK
  * (assets/sfx). Playback is spatialised on the moved piece through the Spatial SDK; if the SDK
  * audio path is unavailable (e.g. on the emulator), it falls back to a plain SoundPool.
  */

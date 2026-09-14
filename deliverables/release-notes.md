@@ -1,11 +1,7 @@
-## Spatial Chess v0.2.2 · 默认英文 · 图标放大
+## Spatial Chess v0.2.2
 
-**变更**
-- 首次启动默认英文（en-US），不再跟随系统语言；在 设置 → Language 里切换到中文后会持久化，之后按用户选择显示。
-- 工具栏五个 Figma 图标放大到 30 dp（约占 48 dp 圆形按钮的 60%），右侧倾斜箭头 24 dp。
+- First launch defaults to English; the language chosen in Settings is persisted.
+- Toolbar icons enlarged to 30 dp (about 60 % of the 48 dp disc).
+- Carried over from v0.2.1: Figma icon exports in the toolbar, dismissible translucent tip with an "!" badge, grab the wooden rim to turn (90° per 12 cm) or tilt (20° per 6 cm) the board with the same steps as Settings and the side arrows.
 
-**沿用 v0.2.1**
-- Figma「04 实装改版」导出图标；可关闭的半透明提示条（感叹号徽标，启动默认显示，点一下隐藏，新提示再显示）；抓棋盘木质边缘旋转（沿边缘每 12 cm 转 90°，抬起每 6 cm 倾斜 20°，档位与设置 / 侧边箭头一致并立即保存）。
-
-**包含**
-- `SpatialChess-debug.apk`：`pico-cli app install SpatialChess-debug.apk` → `pico-cli app launch com.example.spatialchess`（PICO Emulator 6.1 验证）。
+Install: `pico-cli app install SpatialChess-v0.2.2.apk` then `pico-cli app launch com.example.spatialchess` (verified on PICO Emulator 6.1).

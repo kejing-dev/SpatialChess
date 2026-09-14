@@ -13,7 +13,7 @@ import com.pico.spatial.ui.design.systemColorScheme
 import java.io.File
 
 /**
- * Colours taken from the Spatial Chess Figma ("01 主要界面" / "02 组件与规范").
+ * Colours taken from the Spatial Chess Figma (pages "01 main screens" / "02 components").
  * Values that map to a PICO role override that role; the rest are named brand tokens.
  */
 object ChessColors {
@@ -22,13 +22,13 @@ object ChessColors {
     val Muted = Color(0xFF5B6472)       // design-style: fixed-figma-color secondary text
     val Card = Color(0xF5FFFFFF)        // design-style: fixed-figma-color white panel (Frame fill EDF1F5 backdrop)
     val CardBorder = Color(0x1A1C2433)
-    val ChipGreenBg = Color(0xFFE3F1E6) // design-style: fixed-figma-color "已锚定桌面" chip
+    val ChipGreenBg = Color(0xFFE3F1E6) // design-style: fixed-figma-color "anchored" chip (v0.1.0)
     val ChipGreenFg = Color(0xFF2F7A4A)
-    val WarnBg = Color(0xFFFFF1C9)      // design-style: fixed-figma-color "尚未保存" pill
+    val WarnBg = Color(0xFFFFF1C9)      // design-style: fixed-figma-color "not saved" pill
     val WarnFg = Color(0xFF8A6100)
     val TipGlass = Color(0x7AFFFFFF)    // design-style: fixed-figma-color 48% white dismissible tip
     val PillGlass = Color(0xB8FFFFFF)   // design-style: fixed-figma-color 72% white pill behind icon buttons (UI 1.1)
-    val Pill = Color(0xFFEEF1F5)        // design-style: fixed-figma-color "已保存至本机" pill / secondary button
+    val Pill = Color(0xFFEEF1F5)        // design-style: fixed-figma-color "saved on device" pill / secondary button
     val Danger = Color(0xFFC0392B)
 }
 

@@ -154,7 +154,7 @@ private fun BoardView(vm: ChessViewModel) {
 }
 
 /**
- * Status tip under the toolbar. Shows by default ("伸手抓住棋子…"), one tap hides that message;
+ * Status tip under the toolbar. Shows by default ("Grab a piece…"), one tap hides that message;
  * a different message (selection, snap, errors) shows again. Translucent, with an "!" badge so it
  * reads as a dismissible pop-up hint.
  */
@@ -192,7 +192,7 @@ private fun CoordLabel(vm: ChessViewModel, text: String) {
     Text(text = text, color = ChessColors.Muted, style = PicoTheme.typography.labelSmall, fontSize = 11.sp)
 }
 
-// ---------------------------------------------------------------------- top stack (UI 1.1 · 标题 + 图标工具栏 + 提示)
+// ---------------------------------------------------------------------- top stack (UI 1.1: title + icon toolbar + tip)
 
 @Composable
 private fun TopStack(vm: ChessViewModel, onRetryLoad: () -> Unit) {
@@ -217,7 +217,7 @@ private fun TopStack(vm: ChessViewModel, onRetryLoad: () -> Unit) {
     }
 }
 
-/** Title merged with the save state (Figma 04 · 01 / 05): "Spatial Chess" over "自由摆棋 · 已保存至本机". */
+/** Title merged with the save state (Figma 04 · 01 / 05): "Spatial Chess" over "Free play · Saved on device". */
 @Composable
 private fun TitleCard(vm: ChessViewModel, onRetryLoad: () -> Unit) {
     Card {
@@ -247,7 +247,7 @@ private fun titleStatus(vm: ChessViewModel): String = L10n.tf(
     "status" to L10n.t(if (vm.saveState == SaveState.SAVED) "ui.text_003" else "ui.text_045"),
 )
 
-/** Five icon buttons with hover labels (Figma 04 · 01 工具栏 / 08 图标文字提示). */
+/** Five icon buttons with hover labels (Figma 04: 01 toolbar / 08 icon labels). */
 @Composable
 private fun IconToolbar(vm: ChessViewModel) {
     val enabled = vm.phase == Phase.IDLE
@@ -300,7 +300,7 @@ private fun ToolIconButton(
     }
 }
 
-// ---------------------------------------------------------------------- side tilt control (UI 1.1 · 02 每次旋转20°)
+// ---------------------------------------------------------------------- side tilt control (UI 1.1: 02 rotate 20° per tap)
 
 @Composable
 private fun TiltControl(vm: ChessViewModel) {
@@ -382,7 +382,7 @@ private fun Chip(text: String, bg: Color, fg: Color, onClick: (() -> Unit)? = nu
     ) { Text(text, color = fg, style = PicoTheme.typography.bodyMedium, fontWeight = FontWeight.Medium) }
 }
 
-// ---------------------------------------------------------------------- context panel (侧上方)
+// ---------------------------------------------------------------------- context panel (upper side)
 
 @Composable
 private fun ContextPanel(vm: ChessViewModel) {
@@ -500,11 +500,11 @@ private fun ResetDialog(vm: ChessViewModel) {
     )
 }
 
-// ---------------------------------------------------------------------- settings card (UI 1.1 · 03 设置在volume内避让)
+// ---------------------------------------------------------------------- settings card (UI 1.1: 03 settings stay inside the volume)
 
 /**
- * "设置 / Settings" lives above the board instead of a sheet. Normal state: three columns
- * (显示 · 棋盘 · 语言). When the tilted board needs the head room (40°) or the board is enlarged,
+ * "Settings" lives above the board instead of a sheet. Normal state: three columns
+ * (Display · Board · Language). When the tilted board needs the head room (40°) or the board is enlarged,
  * it collapses to the compact tabbed layout (Figma 07 / 09).
  */
 @Composable

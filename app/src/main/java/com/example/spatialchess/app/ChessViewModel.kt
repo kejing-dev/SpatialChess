@@ -75,7 +75,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
 
     private var scene: ChessScene? = null
     private var restoredFromBackup = false
-    private var busy = false            // input lock during commits (PRD: 只保留首个有效命令)
+    private var busy = false            // input lock during commits (PRD: keep only the first valid command)
 
     init {
         L10n.init(appContext, settings.locale)
@@ -136,7 +136,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
         is Location.Tray -> pieceName(p) + " · " + trayWord()
     }
 
-    /** "收纳区" / "Tray" derived from ui.text_043 so the key set stays untouched. */
+    /** "Tray" word derived from ui.text_043 so the key set stays untouched. */
     private fun trayWord(): String = L10n.t("ui.text_043").substringAfterLast("·").trim()
 
     fun captureTitle(square: Int): String = L10n.t("ui.text_015").replace("d5", Square.name(square))
@@ -350,7 +350,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
     fun promote(kind: Kind) {
         val p = panel as? Panel.Promotion ?: (panel as? Panel.PromotionFailed)?.let { Panel.Promotion(it.pieceId) } ?: return
         val piece = snapshot.byId[p.pieceId] ?: return
-        if (promoting) return                       // 连续点击只生成一次
+        if (promoting) return                       // repeated taps create the piece only once
         promoting = true
         hint = L10n.t("runtime.promotion.loading")
         val sc = scene
@@ -377,7 +377,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
 
     fun openHelp() { if (busy) return; deselect(); panel = Panel.Help(firstUse = false) }
 
-    /** "开始摆棋" / "完成" on the help sheet: completes onboarding on first use. */
+    /** "Start playing" / "Done" on the help sheet: completes onboarding on first use. */
     fun closeHelp() {
         val wasFirst = (panel as? Panel.Help)?.firstUse == true
         panel = Panel.None
@@ -395,7 +395,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
         idleHint()
     }
 
-    // ------------------------------------------------------------------ settings (摆放与显示)
+    // ------------------------------------------------------------------ settings (placement & display)
 
     fun openSettings() {
         if (busy) return
@@ -427,7 +427,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
         idleHint()
     }
 
-    /** Side arrows (UI 1.1 · 02 每次旋转20°): apply and save immediately, never inside a grab / capture / promotion. */
+    /** Side arrows (UI 1.1: 02 rotate 20° per tap): apply and save immediately, never inside a grab / capture / promotion. */
     val canTilt: Boolean
         get() = phase == Phase.IDLE && !busy && (panel is Panel.None || panel is Panel.Selected)
 

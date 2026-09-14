@@ -37,7 +37,7 @@ object L10n {
         locale = savedLocale ?: defaultForSystem()
     }
 
-    /** Default for a fresh install: English first; the player can switch to 中文 in Settings. */
+    /** Default for a fresh install: English first; the player can switch to Chinese in Settings. */
     fun defaultForSystem(): String = EN
 
     fun switchLocale(name: String) {
@@ -73,7 +73,7 @@ object L10n {
         return s
     }
 
-    /** "白方兵" / "White pawn": the only locale-specific join rule in code. */
+    /** Side + piece name ("White pawn" / Chinese without a space): the only locale-specific join rule in code. */
     fun pieceName(sideKey: String, pieceKey: String): String =
         if (isChinese) t(sideKey) + t(pieceKey) else t(sideKey) + " " + t(pieceKey)
 }

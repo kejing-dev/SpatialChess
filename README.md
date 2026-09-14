@@ -1,49 +1,50 @@
-# Spatial Chess · 自由摆棋（PICO Spatial SDK）
+# Spatial Chess (PICO Spatial SDK)
 
-离线、Shared Space 的立体国际象棋：一副常驻共享空间的棋盘，用系统窗口把手放到桌面附近，自由移动黑白双方，吃子先收纳再落子，支持撤销/重做、升变、本地自动保存和中英文原地切换（首次启动默认英文）。Shared Space 下暂无平面检测，因此不做桌面锚定。实现依据 `Spatial_Chess_PRD_UIUX.docx` 与 Figma「Spatial Chess 自由摆棋 PRD 与 UI UX」。
+An offline, Shared Space chessboard for PICO OS 6. The board lives in one volumetric window that you place near a table with the system window handles; move either side freely, capture by storing the taken piece first, undo/redo, promote pawns, autosave locally, and switch between English and 中文 in place (English on first launch). Shared Space has no plane detection yet, so there is no table anchoring. Built from `Spatial_Chess_PRD_UIUX.docx` and the Figma file "Spatial Chess 自由摆棋 PRD 与 UI UX".
 
-## 技术要点
+Demo (PICO Emulator, 43 s): [`deliverables/demo.mp4`](deliverables/demo.mp4)
 
-- **UI 1.1（Figma「04 实装改版」）**：标题与保存状态合并居中，图标工具栏移到棋盘上方，右侧上下箭头每次倾斜 ±20°（0–40°），设置改为棋盘上方的三栏 / 分页卡片。
+## Highlights
 
-- **容器**：一个 `Form.Volumetric` 的 `DefaultWindowContainer`（1.3 × 0.62 × 1.0 m，`WorldScale.Fixed`，`VolumeAlignment.Gravity`），全程不打开 Stage。
-- **UI**：PICO Spatial UI —— `PicoTheme`（Figma 配色 + **PICO Sans** 字体）、系统 `Toolbar`（撤销/重做/摆放与显示/重置/帮助）、顶部 `Augment`（标题、保存状态芯片、保存失败横幅）、体积内 `AttachmentPanel`（上下文面板、提示条、托盘计数、坐标）、`Sheet`（摆放与显示、帮助）、`AlertDialog`（重置）。
-- **3D**：`SpatialView` + ECS。层级 `sceneRoot → tiltRoot（绕窗口 X 轴、以近端棋盘边为轴心的俯仰）→ boardRoot（朝向 · 缩放 · 高度）`，倾斜时棋盘、棋子、托盘同步转动而 UI 不随之倾斜；棋盘木质边缘（`rim:front/back/left/right` 碰撞体）可以直接抓：沿边缘拖动每 12 cm 转 90°（方向随抓住的边而定），抬起 / 放下每 6 cm 倾斜 ±20°，复用与设置 / 侧边箭头相同的档位并立即保存；抓取位移经完整逆矩阵（倾斜⁻¹ · 朝向⁻¹ · 缩放⁻¹）换算到棋盘局部再沿棋盘法线吸附。`chess.usdz` 加载一次，32 个 prim 重新挂到各自的 pivot（自动检测 Z-up 并校正），64 个格子碰撞体 + 两侧托盘 + 选中/落点/吃子/禁止标记；升变从隐藏原型 `clone`。托盘与标记的几何体来自 `assets/primitives.usdz`（SDK 的 `MeshResource.createBox` 在部分 PICO OS 真机上缺少 foundation 扩展类会闪退）。
-- **输入**：`detectSpatialTapGesture`（点选辅助）与 `detectSpatialDragGesture`（默认抓取；保留抓取偏移，松手投影到最近有效格并 120 ms 吸附）。
-- **数据**：`BoardState` 为唯一事实来源，Move/Capture/Store/Restore/Promote/Reset/Clear 均产生完整快照并记一条历史（≤120 步）；提交后临时文件 → 校验 → 原子替换，保留一份备份。
-- **本地化**：`assets/locales/{zh-CN,en-US}.json`，键与占位符完全一致，缺键回退 en-US。
-- **音效**：`assets/sfx/*.ogg`，落子/收纳时经 Spatial SDK 在棋子位置播放，失败回退 `SoundPool`。
+- **UI 1.1 (Figma page "04 实装改版")**: title and save state merged into one centred card; the icon toolbar (Figma icon exports, tinted at runtime, hover labels and content descriptions) sits above the board; a translucent, dismissible tip with an "!" badge is shown at start and hidden with one tap until a different message arrives; up/down arrows on the right tilt the board ±20° per tap (0–40°); Settings is a card above the board with three columns (Display · Board · Language) that collapses into tabs when the board is tilted to 40° or scaled to 130 %+.
+- **Container**: one `Form.Volumetric` `DefaultWindowContainer` (1.3 × 0.62 × 1.0 m, `WorldScale.Fixed`, `VolumeAlignment.Gravity`); the Stage is never opened.
+- **UI**: PICO Spatial UI — `PicoTheme` (Figma colours + **PICO Sans** from `/system/fonts/PICOSans.ttf`, default font as fallback), `Augment` (top stack and side tilt control), `IconButton`, in-volume `AttachmentPanel` (context panel, tray counts, coordinates), `Sheet` (help), `AlertDialog` (reset).
+- **3D**: `SpatialView` + ECS. Hierarchy `sceneRoot → tiltRoot (pitch about the window X axis, pivot on the near board edge) → boardRoot (yaw · scale · height)`; board, pieces and trays tilt together while the UI stays upright. The wooden rim (`rim:front/back/left/right` colliders) can be grabbed: dragging along the rim turns the board 90° every 12 cm in the direction the edge is pushed, lifting or lowering it tilts ±20° every 6 cm — the same steps as Settings and the side arrows, saved immediately. Grab deltas go through the full inverse chain (tilt⁻¹ · yaw⁻¹ · scale⁻¹) into board space and snap along the board normal. `chess.usdz` is loaded once and its 32 prims re-parented to per-piece pivots (Z-up detected and corrected); 64 square colliders, two trays and the selection / target / capture / blocked markers come from `assets/primitives.usdz` (the SDK's `MeshResource.createBox` crashes on some PICO OS devices that lack the foundation extension classes). Promotion clones hidden prototypes.
+- **Input**: `detectSpatialTapGesture` (select-then-target) and `detectSpatialDragGesture` (grab; the grab offset is kept, release projects onto the nearest valid square and snaps in 120 ms).
+- **Data**: `BoardState` is the single source of truth; Move / Capture / Store / Restore / Promote / Reset / Clear each produce a full snapshot and one history entry (≤ 120). Saves go temp file → validation → atomic rename, with one backup kept.
+- **Localization**: `assets/locales/{zh-CN,en-US}.json` with identical keys and placeholders; a missing key falls back to en-US. First launch is English; a manual choice is persisted.
+- **Sound**: `assets/sfx/*.ogg`, played at the piece position through the Spatial SDK, `SoundPool` as fallback.
 
-## 下载
+## Downloads
 
-- **APK**：见 GitHub Releases（`SpatialChess-debug.apk`，安装到 PICO Emulator 6.1 / PICO OS 6 设备：`pico-cli app install SpatialChess-debug.apk`）。
-- **模拟器截图与验证报告**：[`deliverables/SpatialChess_模拟器截图与验证.xlsx`](deliverables/SpatialChess_模拟器截图与验证.xlsx)（34 个场景，含 PRD 功能覆盖表）；单张截图在 [`deliverables/screenshots/`](deliverables/screenshots/)。
+- **APK**: see GitHub Releases (`SpatialChess-v<version>.apk`; install on PICO Emulator 6.1 or a PICO OS 6 device with `pico-cli app install <apk>`).
+- **Emulator verification report**: [`deliverables/SpatialChess_Emulator_Verification.xlsx`](deliverables/SpatialChess_Emulator_Verification.xlsx) (49 captured states with the PRD coverage table); individual screenshots in [`deliverables/screenshots/`](deliverables/screenshots/).
 
-## 构建与运行
+## Build and run
 
 ```bash
 export JAVA_HOME=~/.pico/primer-cli/jdk/jdk-21.0.12.1+1/Contents/Home
 ./gradlew :app:assembleDebug
-pico-cli emulator start            # 或已在运行的 PICO 设备
+pico-cli emulator start            # or a connected PICO device
 pico-cli app install app/build/outputs/apk/debug/app-debug.apk
 pico-cli app launch com.example.spatialchess
 pico-cli capture screenshot --out shot.png
 ```
 
-## 调试通道（模拟器不支持脚本化空间输入）
+## Debug channel (the emulator cannot script spatial input)
 
 ```bash
 adb shell am broadcast -a com.example.spatialchess.DEBUG --es cmd select --es arg e2
 adb shell am broadcast -a com.example.spatialchess.DEBUG --es cmd square --es arg e4
 adb shell am broadcast -a com.example.spatialchess.DEBUG --es cmd drag --es arg "'g2 g4'"
-adb shell am broadcast -a com.example.spatialchess.DEBUG --es cmd view --es arg "30,20,1.6"   # 绕棋盘视角 yaw,pitch,zoom
+adb shell am broadcast -a com.example.spatialchess.DEBUG --es cmd view --es arg "30,20,1.6"   # orbit camera yaw,pitch,zoom
 adb shell am broadcast -a com.example.spatialchess.DEBUG --es cmd state
 ```
 
-其他命令：`tap` `store` `cancel` `confirm` `undo` `redo` `reset` `resetStandard` `clear` `settings` `apply` `help` `closeHelp` `promote <queen|rook|bishop|knight>` `skipPromotion` `lang <zh|en>` `orient <deg>` `tilt <0|20|40>` `tiltUp` `tiltDown` `dismissHint` `rim <front|back|left|right>:<dx>,<dy>,<dz>` `scale <80-140>` `height <cm>` `coords <on|off>` `reduceMotion <on|off>` `failsave <on|off>` `save` `pieces` `wipe`。这些命令走与真实输入相同的 ViewModel 路径，仅用于测试。
+Other commands: `tap` `store` `cancel` `confirm` `undo` `redo` `reset` `resetStandard` `clear` `settings` `apply` `help` `closeHelp` `promote <queen|rook|bishop|knight>` `skipPromotion` `lang <zh|en>` `orient <deg>` `tilt <0|20|40>` `tiltUp` `tiltDown` `dismissHint` `rim <front|back|left|right>:<dx>,<dy>,<dz>` `scale <80-140>` `height <cm>` `coords <on|off>` `reduceMotion <on|off>` `failsave <on|off>` `save` `pieces` `wipe`. They run through the same ViewModel paths as real input and exist only for testing.
 
-## 目录
+## Layout
 
 - `app/src/main/java/com/example/spatialchess/`
-  - `Main.kt` 入口 DSL · `ui/` 主题与 Spatial UI · `scene/ChessScene.kt` 3D 场景 · `app/ChessViewModel.kt` 状态机 · `model/Chess.kt` 数据与命令 · `data/` 持久化 · `i18n/` 文案 · `debug/` 调试通道
-- `deliverables/` 模拟器截图与验证表（Excel）
+  - `Main.kt` entry DSL · `ui/` theme, icons and Spatial UI · `scene/ChessScene.kt` 3D scene · `app/ChessViewModel.kt` state machine · `model/Chess.kt` data and commands · `data/` persistence · `i18n/` copy · `debug/` debug channel
+- `deliverables/` emulator verification workbook, screenshots, demo video, release notes

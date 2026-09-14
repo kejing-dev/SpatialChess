@@ -8,7 +8,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Local, offline persistence (PRD chapter 9 "持久化"): serial writes to a temp file, validation,
+ * Local, offline persistence (PRD chapter 9 "Persistence"): serial writes to a temp file, validation,
  * atomic rename, one valid backup kept. A corrupted file is isolated and never overwrites the backup.
  */
 class BoardStore(context: Context) {
@@ -18,7 +18,7 @@ class BoardStore(context: Context) {
     private val backup = File(dir, "board_state.bak")
     private val corrupt = File(dir, "board_state.corrupt")
 
-    /** Test hook (debug broadcast `failsave on`) to exercise the "未能保存" UI. */
+    /** Test hook (debug broadcast `failsave on`) to exercise the "could not save" UI. */
     @Volatile var simulateFailure: Boolean = false
 
     @Synchronized
