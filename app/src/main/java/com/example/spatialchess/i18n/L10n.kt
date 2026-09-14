@@ -6,12 +6,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONObject
-import java.util.Locale
 
 /**
  * Offline bilingual copy loaded from `assets/locales/{zh-CN,en-US}.json` (PRD chapter 15).
  *
- * - First launch follows the system language: Chinese -> zh-CN, everything else -> en-US.
+ * - First launch opens in en-US regardless of the system language (product decision 2026-09-14);
+ *   a manual choice in Settings is persisted and wins afterwards.
  * - A manual choice takes effect immediately (Compose state) and is persisted by the caller.
  * - A missing key falls back to en-US and is logged in debug builds; keys and placeholders are
  *   shared between both languages, sentences are never concatenated from fragments.
@@ -37,10 +37,8 @@ object L10n {
         locale = savedLocale ?: defaultForSystem()
     }
 
-    fun defaultForSystem(): String {
-        val lang = Locale.getDefault().language
-        return if (lang.equals("zh", ignoreCase = true)) ZH else EN
-    }
+    /** Default for a fresh install: English first; the player can switch to 中文 in Settings. */
+    fun defaultForSystem(): String = EN
 
     fun switchLocale(name: String) {
         locale = if (name == ZH) ZH else EN

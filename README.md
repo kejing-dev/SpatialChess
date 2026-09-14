@@ -1,6 +1,6 @@
 # Spatial Chess · 自由摆棋（PICO Spatial SDK）
 
-离线、Shared Space 的立体国际象棋：一副常驻共享空间的棋盘，用系统窗口把手放到桌面附近，自由移动黑白双方，吃子先收纳再落子，支持撤销/重做、升变、本地自动保存和中英文原地切换。Shared Space 下暂无平面检测，因此不做桌面锚定。实现依据 `Spatial_Chess_PRD_UIUX.docx` 与 Figma「Spatial Chess 自由摆棋 PRD 与 UI UX」。
+离线、Shared Space 的立体国际象棋：一副常驻共享空间的棋盘，用系统窗口把手放到桌面附近，自由移动黑白双方，吃子先收纳再落子，支持撤销/重做、升变、本地自动保存和中英文原地切换（首次启动默认英文）。Shared Space 下暂无平面检测，因此不做桌面锚定。实现依据 `Spatial_Chess_PRD_UIUX.docx` 与 Figma「Spatial Chess 自由摆棋 PRD 与 UI UX」。
 
 ## 技术要点
 
