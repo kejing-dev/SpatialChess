@@ -116,5 +116,6 @@
   "ui.text_092": "自由摆棋",
   "runtime.title.status": "{mode} · {status}",
   "runtime.tilt.angle": "{deg}°",
-  "runtime.board.range": "{min}–{max}%"
+  "runtime.board.range": "{min}–{max}%",
+  "ui.text_093": "拖动棋盘边缘：左右转向，抬起倾斜"
 }

@@ -1,6 +1,10 @@
 package com.example.spatialchess.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import com.example.spatialchess.R
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -18,13 +22,30 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Line icons for the UI 1.1 icon toolbar and the side tilt control (Figma page 04 · 图标文字 / Icon labels).
- * Drawn with Canvas so they render identically with PICO Sans and need no icon font or vector assets.
+ * Toolbar icons come straight from the Figma page 04 exports (`res/drawable-nodpi/ic_*.png`, 64 px,
+ * dark glyph on transparent, tinted at runtime); the tilt arrows and the tip badge are drawn with Canvas.
  */
-enum class ToolIcon { UNDO, REDO, SETTINGS, NEW_BOARD, HELP, TILT_UP, TILT_DOWN }
+enum class ToolIcon { UNDO, REDO, SETTINGS, NEW_BOARD, HELP, TILT_UP, TILT_DOWN, INFO }
+
+private val FIGMA_ICONS = mapOf(
+    ToolIcon.UNDO to R.drawable.ic_undo,
+    ToolIcon.REDO to R.drawable.ic_redo,
+    ToolIcon.SETTINGS to R.drawable.ic_settings,
+    ToolIcon.NEW_BOARD to R.drawable.ic_new_board,
+    ToolIcon.HELP to R.drawable.ic_help,
+)
 
 @Composable
 fun ToolIconGlyph(icon: ToolIcon, tint: Color, size: Dp = 22.dp) {
+    FIGMA_ICONS[icon]?.let { res ->
+        Image(
+            painter = painterResource(res),
+            contentDescription = null,
+            modifier = Modifier.size(size),
+            colorFilter = ColorFilter.tint(tint),
+        )
+        return
+    }
     Canvas(modifier = Modifier.size(size)) {
         val stroke = Stroke(width = this.size.width * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round)
         when (icon) {
@@ -35,6 +56,7 @@ fun ToolIconGlyph(icon: ToolIcon, tint: Color, size: Dp = 22.dp) {
             ToolIcon.HELP -> drawHelp(tint, stroke)
             ToolIcon.TILT_UP -> drawArrow(tint, stroke, up = true)
             ToolIcon.TILT_DOWN -> drawArrow(tint, stroke, up = false)
+            ToolIcon.INFO -> drawInfo(tint, stroke)
         }
     }
 }
@@ -103,4 +125,13 @@ private fun DrawScope.drawArrow(tint: Color, stroke: Stroke, up: Boolean) {
     drawLine(tint, tail, tip, stroke.width, StrokeCap.Round)
     drawLine(tint, tip, Offset(w * 0.27f, headY), stroke.width, StrokeCap.Round)
     drawLine(tint, tip, Offset(w * 0.73f, headY), stroke.width, StrokeCap.Round)
+}
+
+/** Exclamation mark in a circle: the tip can be dismissed. */
+private fun DrawScope.drawInfo(tint: Color, stroke: Stroke) {
+    val w = size.width
+    val c = Offset(w / 2f, w / 2f)
+    drawCircle(tint, radius = w * 0.42f, center = c, style = stroke)
+    drawLine(tint, Offset(w * 0.5f, w * 0.28f), Offset(w * 0.5f, w * 0.56f), stroke.width, StrokeCap.Round)
+    drawCircle(tint, radius = w * 0.06f, center = Offset(w * 0.5f, w * 0.71f))
 }

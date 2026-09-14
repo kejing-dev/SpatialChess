@@ -153,18 +153,27 @@ private fun BoardView(vm: ChessViewModel) {
     )
 }
 
+/**
+ * Status tip under the toolbar. Shows by default ("伸手抓住棋子…"), one tap hides that message;
+ * a different message (selection, snap, errors) shows again. Translucent, with an "!" badge so it
+ * reads as a dismissible pop-up hint.
+ */
 @Composable
 private fun HintLabel(vm: ChessViewModel) {
-    val text = vm.hint
-    if (text.isBlank()) return
-    Box(
+    if (!vm.hintVisible) return
+    Row(
         modifier = Modifier
             .widthIn(max = 720.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(ChessColors.Card)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .clip(RoundedCornerShape(22.dp))
+            .background(ChessColors.TipGlass)
+            .clickable { vm.dismissHint() }
+            .semantics { contentDescription = vm.hint }
+            .padding(start = 12.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = text, color = ChessColors.Ink, style = PicoTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        ToolIconGlyph(ToolIcon.INFO, tint = ChessColors.Ink.copy(alpha = 0.72f), size = 18.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(text = vm.hint, color = ChessColors.Ink.copy(alpha = 0.85f), style = PicoTheme.typography.bodyMedium, textAlign = TextAlign.Center)
     }
 }
 

@@ -1,22 +1,10 @@
-## Spatial Chess v0.2.0 · UI 1.1 实装改版
+## Spatial Chess v0.2.1 · Figma 图标、可关闭提示、抓边缘旋转
 
-按 Figma「04 实装改版 · 近距离布局与倾斜」更新界面与交互（PICO Spatial SDK 6.1.9 · Shared Space · PICO Spatial UI + PICO Sans）。
-
-**界面**
-- 标题与本地保存状态合并为一张居中卡片（"自由摆棋 · 已保存至本机"）；保存失败时卡片内直接提供「重试保存」。
-- 工具栏移到棋盘正上方，改为五个图标按钮：撤销 / 重做 / 设置 / 新棋盘 / 帮助，悬停显示文字，并带无障碍名称。
-- 右侧新增倾斜控制：上下两个箭头每次 ±20°，0° 禁用下箭头、40° 禁用上箭头，当前角度常显，点击立即保存。箭头改为明确的上 / 下方向（修正原稿中易与撤销 / 重做混淆的旋转图标）。
-- 「设置 / Settings」改为棋盘上方的卡片：正常状态三栏（显示 · 棋盘 · 语言）；倾斜 40° 或缩放 ≥130% 时自动切为「显示 / 棋盘 / 语言」分页的紧凑布局，棋盘位置与比例保持不变。
-- 收纳区计数等面向玩家的标签不再随棋盘倾斜。
-
-**空间与交互**
-- 以面向玩家的近侧棋盘边为轴抬起远端，棋盘、棋子、托盘同步转动；朝向 90° / 270° 时仍为前后倾斜。
-- 抓取保留抓取点偏移，松手通过完整逆矩阵（倾斜⁻¹ · 朝向⁻¹ · 缩放⁻¹）落到棋盘局部格子，沿棋盘法线吸附。
-- 抓取、吃子确认、升变过程中禁用倾斜；设置内的倾斜按完成 / 取消提交或还原。
-
-**其它**
-- 新增文案键 `ui.text_078`–`ui.text_092`、`runtime.title.status`、`runtime.tilt.angle`、`runtime.board.range`（中英）。
-- 调试广播新增 `tilt <0|20|40>`、`tiltUp`、`tiltDown`。
+**变更**
+- 工具栏五个图标改为 Figma「04 实装改版」导出的图标（撤销 / 重做 / 设置 / 新棋盘 / 帮助），运行时按状态着色。
+- 「伸手抓住棋子，移动后松手吸附」提示改为可关闭的半透明提示条：启动默认显示，左侧感叹号徽标，点一下即隐藏；出现新的提示（选中、吸附、错误等）时再显示。
+- 抓住棋盘的木质边缘即可旋转：沿边缘拖动每 12 cm 转 90°（前边向右 / 后边向左 / 左边拉近 / 右边推远都是 +90°），抬起或放下每 6 cm 倾斜 ±20°（0–40°），档位与设置面板、侧边箭头一致并立即保存；旋转期间棋子操作暂停。
+- 调试广播新增 `dismissHint`、`rim <边>:<dx>,<dy>,<dz>`；文案键 `ui.text_093`。
 
 **包含**
-- `SpatialChess-debug.apk`：`pico-cli app install SpatialChess-debug.apk` → `pico-cli app launch com.example.spatialchess`（PICO Emulator 6.1 验证；真机请重新连接后安装）。
+- `SpatialChess-debug.apk`：`pico-cli app install SpatialChess-debug.apk` → `pico-cli app launch com.example.spatialchess`（PICO Emulator 6.1 验证）。

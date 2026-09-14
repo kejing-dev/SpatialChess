@@ -22,7 +22,7 @@ import com.example.spatialchess.scene.ChessScene
 import com.example.spatialchess.scene.DropCandidate
 import com.pico.spatial.core.math.Vector3
 
-enum class Phase { LOADING, MODEL_FAILED, ONBOARDING, IDLE, GRABBED, ANIMATING }
+enum class Phase { LOADING, MODEL_FAILED, ONBOARDING, IDLE, GRABBED, ROTATING, ANIMATING }
 
 enum class SaveState { SAVED, UNSAVED, FAILED }
 
@@ -46,6 +46,8 @@ class ChessViewModel private constructor(private val appContext: Context) {
 
     companion object {
         private const val TAG = "SpatialChess.VM"
+        private const val RIM_YAW_STEP_M = 0.12f     // hand travel per 90° when dragging the rim sideways
+        private const val RIM_TILT_STEP_M = 0.06f    // hand travel per 20° when lifting the rim
         @Volatile private var instance: ChessViewModel? = null
         fun get(context: Context): ChessViewModel =
             instance ?: synchronized(this) { instance ?: ChessViewModel(context.applicationContext).also { instance = it } }
@@ -62,6 +64,8 @@ class ChessViewModel private constructor(private val appContext: Context) {
     var panel: Panel by mutableStateOf(Panel.None); private set
     var selectedId: String? by mutableStateOf(null); private set
     var hint: String by mutableStateOf(""); private set
+    /** The hint text the player tapped away; the same text stays hidden until a different hint arrives. */
+    var dismissedHint: String? by mutableStateOf(null); private set
     var saveState: SaveState by mutableStateOf(SaveState.SAVED); private set
     var canUndo: Boolean by mutableStateOf(false); private set
     var canRedo: Boolean by mutableStateOf(false); private set
@@ -427,6 +431,69 @@ class ChessViewModel private constructor(private val appContext: Context) {
     val canTilt: Boolean
         get() = phase == Phase.IDLE && !busy && (panel is Panel.None || panel is Panel.Selected)
 
+    val hintVisible: Boolean get() = hint.isNotBlank() && hint != dismissedHint
+
+    /** Tip pill tapped: hide this message (a new, different message shows again). */
+    fun dismissHint() { dismissedHint = hint }
+
+    fun yawBy(deltaDegrees: Int) {
+        if (!canTilt && phase != Phase.ROTATING) return
+        val next = ((settings.yawDegrees + deltaDegrees) % 360 + 360) % 360
+        settings = settings.copy(yawDegrees = next)
+        draft = settings
+        settingsStore.save(settings)
+        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm, settings.tiltDegrees)
+    }
+
+    // ---- grab the wooden rim to rotate: drag along the rim → yaw in 90° steps, lift → tilt in 20° steps
+    private var rimYawAcc = 0f
+    private var rimTiltAcc = 0f
+    private var rimSide = "front"
+
+    private fun beginRimDrag(side: String) {
+        phase = Phase.ROTATING
+        rimSide = side
+        rimYawAcc = 0f; rimTiltAcc = 0f
+        deselect()
+        hint = L10n.t("ui.text_093")
+    }
+
+    /**
+     * The board turns the way the grabbed edge is pushed: the front rim moved right, the back rim
+     * moved left, the left rim pulled towards you or the right rim pushed away all spin it +90°.
+     * Lifting any rim raises the far end (+20°), lowering it brings the board back down.
+     */
+    private fun rimDrag(dx: Float, dy: Float, dz: Float) {
+        rimYawAcc += when (rimSide) {
+            "front" -> dx
+            "back" -> -dx
+            "left" -> dz
+            else -> -dz
+        }
+        rimTiltAcc += dy
+        while (rimYawAcc >= RIM_YAW_STEP_M) { rimYawAcc -= RIM_YAW_STEP_M; stepYaw(90) }
+        while (rimYawAcc <= -RIM_YAW_STEP_M) { rimYawAcc += RIM_YAW_STEP_M; stepYaw(-90) }
+        while (rimTiltAcc >= RIM_TILT_STEP_M) { rimTiltAcc -= RIM_TILT_STEP_M; stepTilt(20) }
+        while (rimTiltAcc <= -RIM_TILT_STEP_M) { rimTiltAcc += RIM_TILT_STEP_M; stepTilt(-20) }
+    }
+
+    private fun stepYaw(delta: Int) { yawBy(delta) }
+
+    private fun stepTilt(delta: Int) {
+        val next = (settings.tiltDegrees + delta).coerceIn(0, 40)
+        if (next == settings.tiltDegrees) return
+        settings = settings.copy(tiltDegrees = next)
+        draft = settings
+        settingsStore.save(settings)
+        scene?.applySettings(settings.scalePercent, settings.yawDegrees, settings.heightOffsetCm, settings.tiltDegrees)
+    }
+
+    private fun endRimDrag() {
+        if (phase != Phase.ROTATING) return
+        phase = Phase.IDLE
+        idleHint()
+    }
+
     fun tiltBy(deltaDegrees: Int) {
         if (!canTilt) return
         val next = (settings.tiltDegrees + deltaDegrees).coerceIn(0, 40)
@@ -447,8 +514,10 @@ class ChessViewModel private constructor(private val appContext: Context) {
     // ------------------------------------------------------------------ grab & drop (default input)
 
     fun onDragStart(entityName: String?) {
-        if (entityName == null || !entityName.startsWith("piece:")) return
+        if (entityName == null) return
         if (!interactive) return
+        if (entityName.startsWith("rim:")) { if (canTilt) beginRimDrag(entityName.removePrefix("rim:")); return }
+        if (!entityName.startsWith("piece:")) return
         val id = entityName.removePrefix("piece:")
         if (snapshot.byId[id] == null) return
         selectedId = id
@@ -459,6 +528,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
     }
 
     fun onDrag(dx: Float, dy: Float, dz: Float) {
+        if (phase == Phase.ROTATING) { rimDrag(dx, dy, dz); return }
         if (phase != Phase.GRABBED) return
         val sc = scene ?: return
         when (val c = sc.moveGrabbed(Vector3(dx, dy, dz), snapshot)) {
@@ -476,6 +546,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
     }
 
     fun onDragEnd() {
+        if (phase == Phase.ROTATING) { endRimDrag(); return }
         if (phase != Phase.GRABBED) return
         val sc = scene ?: return
         val id = selectedId ?: return
@@ -510,6 +581,7 @@ class ChessViewModel private constructor(private val appContext: Context) {
     }
 
     fun onDragCancel() {
+        if (phase == Phase.ROTATING) { endRimDrag(); return }
         if (phase != Phase.GRABBED) return
         scene?.cancelGrab()
         scene?.showTarget(null, false)
@@ -551,6 +623,15 @@ class ChessViewModel private constructor(private val appContext: Context) {
             "orient" -> updateDraft { it.copy(yawDegrees = arg.toIntOrNull() ?: 0) }.also { if (panel !is Panel.Settings) applySettings() }
             "tilt" -> updateDraft { it.copy(tiltDegrees = (arg.toIntOrNull() ?: 0).coerceIn(0, 40)) }.also { if (panel !is Panel.Settings) applySettings() }
             "tiltUp" -> tiltBy(20)
+            "dismissHint" -> dismissHint()
+            "rim" -> {
+                // "[side:]dx,dy,dz" metres: simulate grabbing the wooden rim (front/back/left/right) and moving the hand
+                val side = arg.substringBefore(":", "front").ifBlank { "front" }.takeIf { arg.contains(":") } ?: "front"
+                val p = arg.substringAfter(":").split(",").map { it.trim().toFloatOrNull() ?: 0f }
+                onDragStart("rim:$side")
+                onDrag(p.getOrElse(0) { 0f }, p.getOrElse(1) { 0f }, p.getOrElse(2) { 0f })
+                onDragEnd()
+            }
             "tiltDown" -> tiltBy(-20)
             "scale" -> updateDraft { it.copy(scalePercent = arg.toIntOrNull() ?: 100) }.also { if (panel !is Panel.Settings) applySettings() }
             "height" -> updateDraft { it.copy(heightOffsetCm = arg.toIntOrNull() ?: 0) }.also { if (panel !is Panel.Settings) applySettings() }

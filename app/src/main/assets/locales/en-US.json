@@ -116,5 +116,6 @@
   "ui.text_092": "Free play",
   "runtime.title.status": "{mode} · {status}",
   "runtime.tilt.angle": "{deg}°",
-  "runtime.board.range": "{min}–{max}%"
+  "runtime.board.range": "{min}–{max}%",
+  "ui.text_093": "Drag the rim: sideways to turn, lift to tilt"
 }

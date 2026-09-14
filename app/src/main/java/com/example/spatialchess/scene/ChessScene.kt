@@ -217,6 +217,7 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
 
         if (!loadPrimitives()) return false
         buildSquares()
+        buildRim()
         buildTrays()
         buildMarkers()
         applyTransform()
@@ -281,6 +282,29 @@ class ChessScene(private val content: SpatialViewContent, private val floorY: Fl
         runCatching { piece.components.set(GroundShadowComponent(true, false)) }
         boardRoot.addChild(pivot)
         return pivot
+    }
+
+    /** Grab handles on the wooden rim (outside the 8 × 8 area): drag sideways to turn, lift to tilt. */
+    private fun buildRim() {
+        val inner = 4f * SQ
+        val band = BOARD_HALF - inner
+        val h = 0.012f
+        val y = BOARD_TOP - h / 2f + 0.002f
+        val strips = listOf(
+            "rim:front" to (Vector3(0f, y, inner + band / 2f) to Vector3(2 * BOARD_HALF, h, band)),
+            "rim:back" to (Vector3(0f, y, -(inner + band / 2f)) to Vector3(2 * BOARD_HALF, h, band)),
+            "rim:left" to (Vector3(-(inner + band / 2f), y, 0f) to Vector3(band, h, 2 * inner)),
+            "rim:right" to (Vector3(inner + band / 2f, y, 0f) to Vector3(band, h, 2 * inner)),
+        )
+        for ((name, spec) in strips) {
+            val (pos, size) = spec
+            val e = Entity().apply { setName(name) }
+            e.transform().setPosition(pos)
+            e.components.set(CollisionComponent(listOf(ShapeResource.createBox(size)), PhysicsMaterialResource()))
+            e.components.set(InteractableComponent())
+            runCatching { e.components.set(HoverEffectComponent()) }
+            boardRoot.addChild(e)
+        }
     }
 
     private fun buildSquares() {
