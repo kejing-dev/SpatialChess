@@ -294,7 +294,9 @@ private fun ToolIconButton(
         enabled = enabled,
         interactionSource = interaction,
     ) {
-        ToolIconGlyph(icon, tint = if (enabled) ChessColors.Ink else ChessColors.Ink.copy(alpha = 0.3f))
+        // Figma icons fill ~60% of the 48 dp disc; the drawn tilt arrows stay a little smaller
+        val glyph = if (icon == ToolIcon.TILT_UP || icon == ToolIcon.TILT_DOWN) 24.dp else 30.dp
+        ToolIconGlyph(icon, tint = if (enabled) ChessColors.Ink else ChessColors.Ink.copy(alpha = 0.3f), size = glyph)
     }
 }
 
