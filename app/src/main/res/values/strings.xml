@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Spatial Chess</string>
+    <string name="app_name">象棋 Chess for Share</string>
     <string name="hello">Hello, Spatial SDK!</string>
 </resources>
