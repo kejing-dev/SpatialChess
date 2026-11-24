@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.spatialchess"
         minSdk = 35
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.3"
+        versionCode = 3
+        versionName = "0.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters.add("arm64-v8a") }
